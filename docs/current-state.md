@@ -2,6 +2,29 @@
 
 最后更新：2026-08-23
 
+## External Transport 正式架构（本地 checkpoint）
+
+- 基于 External Child runtime checkpoint
+  `956b193a570c9c42d46cbaca0cca2490b1eb69d8` 创建独立架构分支；原 main
+  worktree 的 catalog safety 与 HTML material 未混入。
+- 正式确立 `Role != Provider != Model != Transport`：保留 Native adapter，并新增
+  External Codex adapter 的正式契约；`0.149.x` Native 继续由 Host compatibility
+  contract fail closed。
+- 新增纯 `transport-contract`、`transport-evidence`、`transport-selection` 模块，覆盖
+  request/result、权限、生命周期状态机、anti-spoof evidence、provider-policy-first
+  selection、explicit-only、single-slot busy 与无 silent fallback。模块尚未接入 Installer、
+  Doctor、Verifier、Preflight、routing 或 active bridge。
+- 新增 19 项纯 contract 测试；完整本地 `npm test` 为 `121/121` PASS，Markdown
+  internal links、diff check、secret/personal-path scan 均通过。
+- 已形成正式 Transport、External、Security、ADR 与六阶段实施计划文档。Threat Model
+  覆盖 credential、argv/env/config、prompt/cwd/symlink、archive/result/provider spoof、
+  orphan/timeout/race、并发、恶意输出、日志与 parent contamination。
+- DeepSeek V4 Flash / External 仅记录 exact Codex CLI `0.149.0` 的 controlled
+  maintainer fixture evidence；public installer/local installation/independent user 仍未验证。
+  Pro External、MiniMax External 与 Qwen External 均保持 `UNKNOWN`；Pro 在任何
+  Transport 下继续 explicit-only。
+- 本任务不发起第三方 API 请求，不改变 package version、发布状态或 production runtime。
+
 ## Host compatibility contract（本地候选分支）
 
 - 当前基线为 `origin/main` `6c317a7751216e9cdb6c346245d34e5e28633ade`；当前 CLI 为

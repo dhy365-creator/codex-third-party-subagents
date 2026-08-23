@@ -2,6 +2,20 @@
 
 ## 已完成（local / verified）
 
+- [x] 2026-08-23 从 `956b193` External Child runtime checkpoint 建立独立 Formal
+  External Transport Architecture 分支，未混入原 main 的 catalog/HTML 修改。
+- [x] 定义 provider-neutral Transport request/result/adapter、Evidence 与 lifecycle
+  contract，明确 `Role != Provider != Model != Transport`、result 自报不是 Provider
+  证据、Main 需交叉验证 result/runtime/workspace evidence。
+- [x] 定义 provider-policy-first 且 fail-closed 的 Transport Selection：显式 Transport
+  不 fallback，`auto` 只在 runtime-verified eligibility 下选择 Native/External，忙时返回
+  `EXTERNAL CHILD BUSY`，Pro explicit-only 跨 Transport 生效。
+- [x] 新增 External Transport Threat Model、ADR、Provider/Transport capability matrix
+  与六阶段实施/回滚计划；Flash External 保持 controlled maintainer evidence，其他
+  External tuple 不扩大证据。
+- [x] 新增 19 项纯 contract 单元测试，完整本地 `npm test` 为 `121/121` PASS；这些
+  模块未接 Installer、Doctor、Verifier、Preflight、routing、active bridge，也未产生
+  第三方 API 请求。
 - [x] 2026-08-23 基于官方 Codex `0.149` bounded role override 建立 version-scoped Host
   compatibility contract，明确 role-level Provider/catalog/endpoint/auth 值会被忽略并继承父线程。
 - [x] 关闭 `multi_agent=true` 的 current Host false-positive：Doctor、Installer、Verifier 与
@@ -57,6 +71,19 @@
 - [x] 修复安全 diff scan 发现的项目级 Custom Agent identity shadowing：运行时预检在 bridge
   创建前检查真实任务 `cwd` 的完整祖先 agent layers，仅排除用户级 agent 目录；存在项目 TOML
   或检查不确定时 fail closed 到 OpenAI，并覆盖自定义 project root markers 与嵌套 Git 仓库。
+
+## External Transport 分阶段实施
+
+- [ ] Phase 1：productionize provider-neutral External adapter、isolated config、lifecycle、
+  result/evidence 与 fake-process 安全测试；保持 active routing disabled。
+- [ ] Phase 2：接入 Doctor/Verifier/Preflight/Installer contract 与 feature gate；普通检查保持
+  read-only/non-billable，maintainer evidence 与 local installation 分开。
+- [ ] Phase 3：在明确 `BILLABLE PROVIDER REQUEST` 与用户授权下完成 DeepSeek Flash
+  clean-install production E2E。
+- [ ] Phase 4：独立完成 DeepSeek V4 Pro External explicit-only E2E，不自动路由。
+- [ ] Phase 5：按 MiniMax、Qwen 顺序分别验证 External tuple，不复用或扩大证据。
+- [ ] Phase 6：clean install、package artifact、migration/uninstall、independent-user acceptance
+  与 release gate。
 
 ## 公开仓库
 

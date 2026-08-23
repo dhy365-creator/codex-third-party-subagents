@@ -17,7 +17,39 @@
   [Host compatibility contract](host-compatibility.md). Native multi-agent
   availability alone is insufficient.
 
-### Read-only Doctor
+## Provider-neutral transport decision
+
+The formal handoff architecture separates Role, Provider, Model, and Transport.
+An already-authorized provider/model tuple may use either a Host-compatible
+Native adapter or an isolated External Codex adapter without changing the task,
+result, lifecycle, or evidence contract.
+
+```text
+Role != Provider != Model != Transport
+```
+
+Selection is explainable and fail-closed: provider policy is evaluated first;
+an explicit transport either passes or blocks; `auto` prefers a runtime-verified
+Native adapter, then a runtime-verified External adapter, otherwise blocks. It
+never silently changes provider/model, falls back to OpenAI, pins an older Host,
+or uses an explicit-only role.
+
+The current architecture checkpoint adds only pure validation/selection
+contracts and documentation. It does **not** connect External execution to
+Installer, Doctor, Verifier, Preflight, routing, or the active bridge. See:
+
+- [Provider-neutral transport contract](transport-contract.md)
+- [External Codex transport architecture](external-transport.md)
+- [External transport security model](transport-security.md)
+- [Phased implementation plan](external-transport-implementation-plan.md)
+- [ADR 001](adr/001-external-codex-transport.md)
+
+DeepSeek V4 Flash External evidence is controlled maintainer evidence for exact
+Codex CLI `0.149.0`; it is not public-installation or independent-user evidence.
+Native `0.149.x` remains blocked, and other External provider/model tuples remain
+unknown.
+
+## Read-only Doctor
 
 `npm run doctor -- --provider <provider>` inspects the local prerequisites
 before installation. It checks the platform, Node.js, recognizable Codex state,
@@ -120,7 +152,7 @@ Uninstall validates all actions before writing anything. It removes only exact h
 matches, restores validated backups, and removes only the exact AGENTS marker
 block. Any conflict stops the whole uninstall plan.
 
-## Data flow
+## Current active Native-path data flow
 
 ```mermaid
 flowchart LR
@@ -134,6 +166,9 @@ flowchart LR
     O --> S["Codex review and synthesis"]
     A --> S
 ```
+
+The External adapter shown in the formal decision documents is not part of this
+active data flow yet.
 
 ## Verification states
 
