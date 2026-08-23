@@ -13,12 +13,15 @@
 - A Custom Agent's Host identity comes from its official TOML `name` field,
   not from a routing request or preflight role list. See
   [the migration guide](migration/custom-agents.md).
+- Cross-provider child execution is enabled only by the exact, version-scoped
+  [Host compatibility contract](host-compatibility.md). Native multi-agent
+  availability alone is insufficient.
 
 ### Read-only Doctor
 
 `npm run doctor -- --provider <provider>` inspects the local prerequisites
 before installation. It checks the platform, Node.js, recognizable Codex state,
-Custom Agent capability and multi-agent mode, expected name/model/provider,
+native multi-agent mode and cross-provider Host compatibility, expected name/model/provider,
 duplicate or project-scope identities, legacy migration state, owner-only
 permissions, Keychain item presence, OpenAI fallback hints, installed-manifest
 state, and prerequisites for the existing verifier.
@@ -34,9 +37,11 @@ provider, unsupported model, missing credential, or incompatible platform.
 
 `~/.codex/agents/<provider>_worker.toml` is a user-scoped official Custom
 Agent definition. Its TOML `name` is the Host identity; its
-`description` and `developer_instructions` are required. It selects the
-provider pack model, defines the model provider block, and reads credentials from
-Keychain. The installer never writes `~/.codex/config.toml` or project
+`description` and `developer_instructions` are required. It declares the
+provider-pack model/provider block and command-backed Keychain authentication.
+Those role-level provider values take effect only on a compatible Host; Codex
+`0.149.0` ignores them and inherits the parent provider. The installer never
+writes `~/.codex/config.toml` or project
 `.codex/agents` definitions.
 
 ### Runtime catalog
@@ -62,10 +67,13 @@ A local catalog or saved setup script can be used for offline installation.
 
 ### Live preflight
 
-`~/.codex/bin/subagent-preflight.mjs` reads Codex rate limits through the local
-Codex app-server, verifies installed provider files and the Keychain item, and
-applies the routing policy. Spark entitlement and live Spark remaining quota are
-separate inputs. If quota lookup fails, routing stays on an OpenAI worker.
+`~/.codex/bin/subagent-preflight.mjs` first checks the exact Host compatibility
+contract. A blocked or unknown Host returns an OpenAI route or deny before
+provider readiness checks or bridge creation. On a historically verified Host,
+it then reads Codex rate limits through the local Codex app-server, verifies
+installed provider files and the Keychain item, and applies the routing policy.
+Spark entitlement and live Spark remaining quota are separate inputs. If quota
+lookup fails, routing stays on an OpenAI worker.
 
 After policy selects a provider role but before writing a task, preflight checks
 every `.codex/agents` layer in the real task-`cwd` ancestor chain. It excludes
@@ -127,10 +135,17 @@ flowchart LR
     A --> S
 ```
 
-## Verification levels
+## Verification states
 
-- `configured`: files, permissions, hashes, catalog rules, marker, and Keychain
-  checks are valid locally.
+- `configured`: files, permissions, hashes, catalog rules, marker checks, and
+  any requested credential check are valid locally; this is independent of the
+  current Host contract.
+- `discoverable`: local definitions are valid and native multi-agent is on.
+- `providerResolved`: the third-party provider has attributable runtime evidence.
+- `taskDelivered`: the intended task reached that provider child.
+- `runtimeExecuted`: a live provider child task executed.
+- `configurationReady`: local configuration and Host compatibility both pass.
+- `ready`: `configurationReady` plus a verified Keychain credential.
 - `agentEvidence`: per agent/provider/model local configuration checks with
   a timestamp; it intentionally has no Host runtime metadata.
 - `runtimeVerified`: not claimed by verifier. Real Codex tasks are recorded

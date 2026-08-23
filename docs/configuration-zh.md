@@ -1,10 +1,15 @@
 # 配置指南
 
-**Codex Third-Party Subagents（Codex 第三方子代理）** 把可选 fallback provider 封装为
-Codex Desktop 的有界子代理，不替换主线程 OpenAI 模型。本版本为非官方、macOS-only、
-公开 beta；GitHub/package slug 为 `codex-third-party-subagents`。
+**Codex Third-Party Subagents（Codex 第三方子代理）** 是第三方模型有界交接的
+version-scoped 兼容、安装与验证层，不替换主线程 OpenAI 模型。本版本为非官方、
+macOS-only、公开 beta；GitHub/package slug 为 `codex-third-party-subagents`。
 
 ## 安装前确认
+
+先运行 `npm run doctor` 并阅读 [Host compatibility contract](host-compatibility.md)。
+精确 `0.147.0` 只有历史兼容证据；当前 `0.149.x` line 为 Host Blocked；其他未经验证
+版本为 Unknown。Blocked/Unknown Host 只能 inspect、Doctor、dry-run 和 migration
+analysis，不能 `--apply` 或创建 active provider bridge。
 
 安装器会要求确认：
 
@@ -92,7 +97,8 @@ Flash 的自动替换或回退。
 
 ## 3. 正式写入
 
-检查 dry-run 输出无误后，在相同命令末尾添加：
+只有 Doctor 报告 Host 为 Level A 或 Level B，且检查 dry-run 输出无误后，才能在相同
+命令末尾添加：
 
 ```sh
 --apply
@@ -117,7 +123,10 @@ Flash 的自动替换或回退。
 node scripts/verify.mjs
 ```
 
-`configured: true` 只表示本地文件、权限、hash、Keychain 和 catalog 校验正确。
+`configured: true` 只表示本地文件、权限、hash、catalog 与已请求的凭据检查正确。
+`discoverable`、`providerResolved`、`taskDelivered`、`runtimeExecuted` 与
+`runtimeVerified` 分开报告；`configurationReady` 还要求 Host 兼容，`ready` 再要求
+Keychain 检查通过。
 `runtimeVerified` 仍会是 `false`：当前验证器不摄取或独立接受外部运行记录。真实文本/
 代码子任务及主线程复核必须作为单独、按 Agent/Model 归因的证据记录。
 
@@ -130,7 +139,7 @@ Host 返回的运行时元数据，不能把 Flash 的任何记录扩大为 Pro�
 1. Spark 真实有额度时优先 `spark-worker`。
 2. Spark 不可用后，通用额度高于或等于阈值时用 OpenAI 回退（`luna_worker` 先于
    `spark-worker`）。
-3. 只有低于阈值、任务适合、Keychain/配置正常且桥为空闲时才会走 provider
+3. 只有精确 Host 为 Level A、低于阈值、任务适合、Keychain/配置正常且桥为空闲时才会走 provider
    fallback。
 4. 额度查询失败时保留 OpenAI worker，不自动外发给 provider。
 5. 图片、音视频、浏览器、桌面和非文本多模态任务不得交给 provider。

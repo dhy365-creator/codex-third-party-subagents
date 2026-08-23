@@ -193,28 +193,41 @@ export async function runDoctor(options = {}) {
     });
     add(
       checks,
-      'Custom Agent host',
-      customAgentHost.supported === true
+      'Multi-agent availability',
+      customAgentHost.multiAgent === true
         ? STATUS.PASS
-        : customAgentHost.supported === false ? STATUS.BLOCKED : STATUS.WARN,
-      customAgentHost.supported === true
+        : customAgentHost.multiAgent === false ? STATUS.BLOCKED : STATUS.WARN,
+      customAgentHost.multiAgent === true
         ? `Codex ${customAgentHost.version ?? 'CLI'} reports multi_agent enabled`
-        : customAgentHost.reason,
+        : customAgentHost.multiAgent === false
+          ? `Codex ${customAgentHost.version ?? 'CLI'} reports multi_agent disabled`
+          : 'Codex multi_agent availability could not be established',
+    );
+    const compatibility = customAgentHost.compatibility;
+    add(
+      checks,
+      'Host cross-provider subagent',
+      compatibility?.configurationInstallAllowed === true
+        ? STATUS.PASS
+        : compatibility ? STATUS.BLOCKED : STATUS.WARN,
+      compatibility?.reason ?? 'cross-provider Host compatibility could not be established',
     );
     add(
       checks,
       'Multi-agent configuration',
-      customAgentHost.supported !== true
+      customAgentHost.multiAgent !== true
         ? STATUS.WARN
         : customAgentHost.multiAgentV2 === true ? STATUS.WARN : STATUS.PASS,
-      customAgentHost.supported !== true
+      customAgentHost.multiAgent !== true
         ? 'cannot establish the active multi-agent configuration'
         : customAgentHost.multiAgentV2 === true
           ? 'multi_agent_v2 is also enabled; validate Host precedence before live dispatch'
           : 'multi_agent is active; multi_agent_v2 is not required and was not changed',
     );
   } catch {
-    add(checks, 'Custom Agent host', STATUS.WARN, 'Custom Agent capability could not be inspected');
+    add(checks, 'Multi-agent availability', STATUS.WARN, 'multi-agent capability could not be inspected');
+    add(checks, 'Host cross-provider subagent', STATUS.BLOCKED,
+      'cross-provider Host compatibility is unknown; active installation is blocked');
     add(checks, 'Multi-agent configuration', STATUS.WARN, 'cannot establish the active multi-agent configuration');
   }
 
@@ -334,9 +347,16 @@ export async function runDoctor(options = {}) {
         env: options.env ?? process.env,
         platform,
         homeDir,
+        customAgentHost,
       });
-      add(checks, 'Verify prerequisites', result.configured ? STATUS.PASS : STATUS.BLOCKED,
-        result.configured ? 'local configuration checks are clean' : `${result.issues.length} local configuration issue(s) found`);
+      const ready = result.configurationReady ?? (
+        result.configured === true
+        && customAgentHost?.compatibility?.configurationInstallAllowed === true
+      );
+      add(checks, 'Verify prerequisites', ready ? STATUS.PASS : STATUS.BLOCKED,
+        ready
+          ? 'local configuration and Host compatibility checks are clean'
+          : `${result.issues.length} local configuration issue(s) or Host compatibility blocker(s) found`);
     } catch {
       add(checks, 'Verify prerequisites', STATUS.BLOCKED, 'local configuration checks could not complete');
     }

@@ -2,6 +2,16 @@
 
 ## 已完成（local / verified）
 
+- [x] 2026-08-23 基于官方 Codex `0.149` bounded role override 建立 version-scoped Host
+  compatibility contract，明确 role-level Provider/catalog/endpoint/auth 值会被忽略并继承父线程。
+- [x] 关闭 `multi_agent=true` 的 current Host false-positive：Doctor、Installer、Verifier 与
+  preflight 对 `0.149.x` line 报 Level C Host Blocked，对未经验证版本报 Level D Unknown。
+- [x] Installer 在 blocked/unknown Host 上保留 inspect、Doctor、dry-run、migration analysis，
+  但在 active installation 写入、provider readiness 与 bridge creation 前 fail closed。
+- [x] Verifier 分开输出 configured/discoverable/provider resolved/task delivered/runtime
+  executed/runtime verified，不再从 TOML 与 multi-agent 推导第三方 runtime success。
+- [x] 新增 Host contract、Doctor false-positive、Verifier false-positive、Installer/preflight
+  fail-before-bridge 回归测试；完整本地基线从 `79/79` 增至 `91/91`。
 - [x] `0.4.0-beta.2` 候选新增只读 Doctor，并覆盖环境、Provider/Model、Keychain 存在性、
   fallback、安装态、权限、verify 前置条件、无 mutation 与无私有路径输出测试。
 - [x] 新增 Bug、Provider 兼容性、Feature 三组 GitHub Issue Forms 与安全问题私下入口。
@@ -36,7 +46,7 @@
 - [x] 2026-08-16 完成 Custom Agents architecture migration：官方 TOML `name` 作为
   Host identity；安装器/Doctor/verify 检查 capability、identity、duplicate、legacy migration
   与 per-agent evidence；`complete`/`fail` 等非官方顶层字段不再生成。
-- [x] 2026-08-16 以当前 Host 发现的 `deepseek_worker` 做有界 Flash dispatch 检查；任务完成、
+- [x] 2026-08-16 以当时 `0.147.0` Host 发现的 `deepseek_worker` 做有界 Flash dispatch 检查；任务完成、
   system bridge active slot 释放。未取得可独立归因的 provider 返回模型元数据，因此
   `runtimeVerified` 仍为 `false`。
 - [x] 2026-08-16 在全新 Host session 完成 Flash 与显式 Pro 的只读代码 fixture E2E：
@@ -90,3 +100,10 @@
 - [ ] 在真实用户环境执行 dry-run 后，由用户确认再 `--apply`。
 - [ ] 重启 Codex Desktop，执行一个不敏感文本/代码子任务。
 - [ ] 完成用户人工验收与运行时状态更新。
+
+## `v0.5.0-beta.1` release gate
+
+- [ ] **NOT READY**：先由维护者选择下一阶段 Host 架构方向；当前任务不创建 Release/tag。
+- [ ] 方向 A：等待 Codex 官方提供 cross-provider child support。
+- [ ] 方向 B：只维护精确版本范围内的 legacy compatibility，不静默 pin 或引导降级。
+- [ ] 方向 C：另行设计有界、provider-neutral handoff；本轮不实现新 transport/sidecar。

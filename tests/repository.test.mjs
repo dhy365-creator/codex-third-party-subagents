@@ -41,6 +41,7 @@ test('CLI rejects any API-key flag', () => {
 test('post-install success signal appears only after complete local verification', () => {
   const success = summarizeVerify({
     configured: true,
+    ready: true,
     runtimeVerified: false,
     credentialReady: true,
     issues: [],
@@ -51,6 +52,7 @@ test('post-install success signal appears only after complete local verification
 
   const verificationFailure = summarizeVerify({
     configured: false,
+    ready: false,
     runtimeVerified: false,
     credentialReady: true,
     issues: ['managed file changed'],
@@ -60,12 +62,24 @@ test('post-install success signal appears only after complete local verification
 
   const credentialCheckSkipped = summarizeVerify({
     configured: true,
+    ready: false,
     runtimeVerified: false,
     credentialReady: null,
     issues: [],
     warnings: ['Keychain credential check was skipped'],
   });
   assert.equal(credentialCheckSkipped.POST_INSTALL_STATUS, undefined);
+
+  const hostBlocked = summarizeVerify({
+    configured: true,
+    ready: false,
+    credentialReady: true,
+    runtimeVerified: false,
+    hostCompatibility: { level: 'LEVEL_C_HOST_BLOCKED' },
+    issues: ['Host cross-provider subagent host_blocked'],
+    warnings: [],
+  });
+  assert.equal(hostBlocked.POST_INSTALL_STATUS, undefined);
 });
 
 test('optional Star policy is agent-only, consent-based, and non-blocking', async () => {

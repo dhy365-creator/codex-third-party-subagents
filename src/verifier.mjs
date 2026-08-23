@@ -4,7 +4,12 @@ import { discoverEnvironment } from './environment.mjs';
 import { fs, lstatIfExists, sha256File } from './fs-utils.mjs';
 import { keychainReady } from './keychain.mjs';
 import { extractAgentsBlock } from './templates.mjs';
-import { validateCustomAgentToml } from './custom-agents.mjs';
+import { inspectCustomAgentHost, validateCustomAgentToml } from './custom-agents.mjs';
+import {
+  evaluateHostCompatibility,
+  HOST_COMPATIBILITY_LEVELS,
+  publicHostCompatibility,
+} from './host-compatibility.mjs';
 import {
   DEFAULT_PROVIDER_ID as PACK_DEFAULT,
   resolveProviderPack,
@@ -17,6 +22,7 @@ const RUNTIME_FILES = [
   'custom-agents.mjs',
   'environment.mjs',
   'fs-utils.mjs',
+  'host-compatibility.mjs',
   'keychain.mjs',
   'preflight-runtime.mjs',
   'provider-packs.mjs',
@@ -96,26 +102,73 @@ async function readManifest(env) {
   return manifest;
 }
 
+async function inspectHost(options) {
+  if (options.customAgentHost) return options.customAgentHost;
+  try {
+    return await (options.inspectCustomAgentHostImpl ?? inspectCustomAgentHost)({
+      codexPath: options.codexPath,
+      commandRunner: options.commandRunner,
+    });
+  } catch {
+    return { compatibility: evaluateHostCompatibility() };
+  }
+}
+
+function hostState(host) {
+  const compatibility = host.compatibility ?? evaluateHostCompatibility({
+    version: host.version,
+    multiAgent: host.multiAgent,
+  });
+  const blocked = compatibility.level === HOST_COMPATIBILITY_LEVELS.HOST_BLOCKED;
+  return {
+    compatibility,
+    issue: compatibility.configurationInstallAllowed
+      ? null
+      : `Host cross-provider subagent ${compatibility.status.toLowerCase()}: ${compatibility.reason}`,
+    providerResolved: blocked ? false : null,
+    taskDelivered: blocked ? false : null,
+  };
+}
+
+function incompleteResult({ env, warnings, issue, host }) {
+  const state = hostState(host);
+  return {
+    configured: false,
+    discoverable: false,
+    providerResolved: state.providerResolved,
+    taskDelivered: state.taskDelivered,
+    runtimeExecuted: false,
+    runtimeVerified: false,
+    configurationReady: false,
+    ready: false,
+    credentialReady: null,
+    hostCompatibility: publicHostCompatibility(state.compatibility),
+    issues: [issue, state.issue].filter(Boolean),
+    warnings,
+    environment: env,
+  };
+}
+
 export async function verify(options = {}) {
   const checkedAt = (options.now instanceof Date ? options.now : new Date()).toISOString();
   let env = discoverEnvironment({ provider: options.provider ?? PACK_DEFAULT, ...options, env: options.env ?? process.env });
   const issues = [];
   const warnings = [];
+  const host = await inspectHost(options);
+  const currentHost = hostState(host);
   let manifest;
   try {
     manifest = await readManifest(env);
   } catch (error) {
-    return { configured: false, runtimeVerified: false, issues: [error.message], warnings, environment: env };
+    return incompleteResult({ env, warnings, issue: error.message, host });
   }
 
   if (!manifest) {
-    return {
-      configured: false,
-      runtimeVerified: false,
-      issues: ['install manifest is missing'],
-      warnings,
-      environment: env,
-    };
+    return incompleteResult({ env, warnings, issue: 'install manifest is missing', host });
+  }
+
+  if (!manifest.options?.hostCompatibility?.level) {
+    issues.push('install manifest is missing the Host compatibility contract');
   }
 
   const providerId = manifest.options?.providerId ?? env.providerPack?.id ?? PACK_DEFAULT;
@@ -231,6 +284,9 @@ export async function verify(options = {}) {
     if (!configCustomAgentsAreValid(config, profiles)) {
       issues.push('runtime config custom-agent identities are invalid');
     }
+    if (!config.hostCompatibility?.level) {
+      issues.push('runtime config Host compatibility contract is missing');
+    }
     const expectedDefaultRole = providerId === 'deepseek'
       ? profiles.find((profile) => profile.profile === 'flash')?.role ?? null
       : profiles[0]?.role ?? null;
@@ -265,15 +321,29 @@ export async function verify(options = {}) {
     warnings.push('Keychain credential check was skipped');
   }
   warnings.push('No live Codex subagent task was run; runtime remains unverified');
+  if (currentHost.issue) warnings.push(currentHost.issue);
   const selectedAgentEvidence = agentEvidence.find((evidence) => (
     evidence.providerRole === providerPack?.role && evidence.model === providerPack?.model
   )) ?? null;
 
+  const configured = issues.length === 0;
+  const discoverable = profiles.length > 0
+    && agentEvidence.every((evidence) => evidence.configured)
+    && host.multiAgent === true;
+  const configurationReady = configured
+    && currentHost.compatibility.configurationInstallAllowed === true;
   return {
-    configured: issues.length === 0,
+    configured,
+    discoverable,
+    providerResolved: currentHost.providerResolved,
+    taskDelivered: currentHost.taskDelivered,
+    runtimeExecuted: false,
     runtimeVerified: false,
+    configurationReady,
+    ready: configurationReady && credentialReady === true,
     credentialReady,
-    issues,
+    hostCompatibility: publicHostCompatibility(currentHost.compatibility),
+    issues: [...issues, currentHost.issue].filter(Boolean),
     warnings,
     environment: env,
     manifest,
@@ -297,6 +367,10 @@ export async function verify(options = {}) {
     runtimeEvidence: selectedAgentEvidence ? {
       ...selectedAgentEvidence,
       evidenceSource: 'local Custom Agent configuration validation',
+      discoverable,
+      providerResolved: currentHost.providerResolved,
+      taskDelivered: currentHost.taskDelivered,
+      runtimeExecuted: false,
       runtimeVerified: false,
     } : null,
   };

@@ -68,8 +68,9 @@ MCP 等超出当前 provider 及防线范围。
 ## `verify` 显示 `runtimeVerified: false`
 
 这是正常且有意的。`verify` 只验证本地配置，不会为了验证而消耗额度或自动向
-provider 发送任务。重启 Codex Desktop 后需要真实运行一次适合的子任务，并由主线
-程复核后，才可认定运行时可用。
+provider 发送任务。先检查 `hostCompatibility`：当前 `0.149.x` line 会 fail closed，
+不能通过重启或 TOML 存在来升级为运行时可用。只有精确 Host 契约允许 cross-provider
+child，并完成可归因 E2E 与主线程复核后，才可记录运行时证据。
 
 ## 卸载冲突
 

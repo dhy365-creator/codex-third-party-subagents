@@ -19,6 +19,7 @@ const RUNTIME_FILES = [
   'custom-agents.mjs',
   'environment.mjs',
   'fs-utils.mjs',
+  'host-compatibility.mjs',
   'keychain.mjs',
   'preflight-runtime.mjs',
   'provider-packs.mjs',

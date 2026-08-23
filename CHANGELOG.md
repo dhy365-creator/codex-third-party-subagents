@@ -6,6 +6,15 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Add a version-scoped, fail-closed Host compatibility contract. Exact Codex
+  `0.147.0` DeepSeek Flash/Pro evidence is labelled historical; the Codex
+  `0.149.x` line, including the current Desktop prerelease, is blocked because
+  role-level provider configuration is inherited from the parent; other
+  unverified Hosts remain unknown.
+- Separate native multi-agent availability from cross-provider compatibility in
+  Doctor, block active installation and bridge routing on blocked/unknown Hosts,
+  and split verifier output into local configuration, discovery, provider
+  resolution, task delivery, execution, and runtime verification states.
 - Rename the public project to **Codex Third-Party Subagents** / **Codex 第三方
   子代理** and the repository/package slug to `codex-third-party-subagents`.
   Retain the existing `codex-third-party-workers` on-disk runtime namespace for

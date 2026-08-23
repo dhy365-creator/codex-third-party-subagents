@@ -1,6 +1,26 @@
 # 当前状态
 
-最后更新：2026-08-16
+最后更新：2026-08-23
+
+## Host compatibility contract（本地候选分支）
+
+- 当前基线为 `origin/main` `6c317a7751216e9cdb6c346245d34e5e28633ade`；当前 CLI 为
+  `0.149.0`，Desktop bundled Codex 为 `0.149.0-alpha.4.1`。
+- 官方 `0.149` bounded role override 支持 `model`、`model_reasoning_effort`、
+  `developer_instructions` 以及 skills/features reductions；role 内的 `model_provider`、
+  `model_providers`、`model_catalog_json`、Provider endpoint/auth 值不生效，实际值继承父线程。
+- 新增 version-scoped Host compatibility contract：精确 `0.147.0` 的既有 Flash/Pro
+  记录为 **HISTORICAL RUNTIME VERIFIED**；`0.149.x` line 为 Level C Host Blocked；
+  `0.148.x` 和其他未经验证版本为 Level D Unknown。没有建议用户降级或静默 pin 旧版本。
+- `multi_agent=true` 不再等于 cross-provider child supported。Doctor 会分开显示原生
+  multi-agent 与 Host cross-provider 状态；Installer 在 Level C/D 仍允许 inspect、Doctor、
+  dry-run 和 migration analysis，但 `--apply` 在任何写入前停止。
+- 运行时 preflight 会在 provider readiness 和 bridge creation 前重新检查当前 Host；只有
+  Level A 可自动路由或创建 bridge。Level B 只允许配置，Level C/D 回到 OpenAI 或 deny。
+- Verifier 分开输出 `configured`、`discoverable`、`providerResolved`、`taskDelivered`、
+  `runtimeExecuted`、`runtimeVerified`、`configurationReady` 与 `ready`。在 `0.149.0` 上，
+  本地配置可以完整，但第三方 Provider resolution 与 runtime success 不会被报告为通过。
+- `v0.5.0-beta.1` 当前为 **NOT READY**；本任务不创建 Release 或 tag。
 
 ## Custom Agents architecture migration（本地候选分支）
 
@@ -10,9 +30,8 @@
 - 已按当前 Codex Custom Agents 机制将 Host identity 与项目路由策略分离：用户级
   `~/.codex/agents/*.toml` 的 `name` 是 Host identity；`requestedAgent`
   只用于项目预检的选择输入，不再被写成“注册”机制。
-- 当前 CLI Host 审计为 `0.147.0`，`multi_agent` 已启用、`multi_agent_v2`
-  未启用。安装器的 `--apply` 会先阻止不支持的 Host、重复/错配/项目级冲突与
-  未显式迁移的旧定义；dry-run 不写文件。
+- 历史 CLI Host E2E 基于精确 `0.147.0`，当时 `multi_agent` 已启用、
+  `multi_agent_v2` 未启用。该证据不外推到当前 `0.149.0` Host。
 - 安全 diff scan 发现项目级同名 Custom Agent 可覆盖预检验证过的用户级 identity；运行时
   预检现会检查真实任务 `cwd` 的完整祖先 agent layers，仅排除用户级 `~/.codex/agents`。
   发现任意项目 TOML 或无法安全读取时，在创建 bridge 前回退 OpenAI；该边界也覆盖自定义
@@ -79,14 +98,15 @@
 - Keychain 使用独立服务名读取，不接收明文 `--api-key`。
 - 主线程 `config.toml`、model、provider、auth 不在写入范围内。
 - 安装/验证时使用 owner-only 目录与文件（`0700` / `0600`），并保持配置哈希。
-- `verify` 仅在配置、托管文件与 Keychain 检查全部通过时输出
+- `verify` 仅在配置、托管文件、兼容 Host 与 Keychain 检查全部通过时输出
   `POST_INSTALL_STATUS: "SUCCESS"`；可复制的 Codex 安装提示词随后只允许询问一次
   可选 Star，绝不由 installer 自动执行，也不影响安装或使用状态。
 
 ## 已在隔离环境验证
 
-- `npm test`：2026-08-14 本地通过 `50/50` 项测试；本迁移分支当前通过 `79/79` 项测试，
-  覆盖 Custom Agent TOML schema、Host capability、重复/错配 identity、legacy migration、
+- `npm test`：2026-08-14 本地通过 `50/50` 项测试；当前候选分支通过 `91/91` 项测试，
+  覆盖 Host compatibility levels/current false-positive、Custom Agent TOML schema、
+  重复/错配 identity、legacy migration、
   rollback、per-agent verify evidence、Doctor 只读性和私有路径保护。
 - fake home 的 dry-run、apply、重复安装、verify、dry-run uninstall、正式 uninstall 与
   冲突停止通过。
@@ -111,6 +131,9 @@
 
 ## 尚未完成或未声称
 
+- 当前 CLI `0.149.0` 与 bundled Desktop `0.149.0-alpha.4.1` 不支持本项目所需的
+  OpenAI Main -> third-party Provider child topology；尚未选择下一阶段架构方向。
+- `0.148.x` 没有可归因的项目 Host evidence，保持 Level D Unknown；不得自动宣告兼容。
 - 已完成 Flash 与显式 Pro 的受控维护者 E2E，但尚未取得独立真实用户验收；验证器仍不会把
   外部记录自动写成 `runtimeVerified: true`。
 - Pro 的 provider dashboard 归因、跨任务可靠性和公开安装器用户验收仍未完成；继续保持

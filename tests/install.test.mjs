@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { install } from '../src/installer.mjs';
 import { uninstall } from '../src/uninstaller.mjs';
 import { verify } from '../src/verifier.mjs';
+import { evaluateHostCompatibility } from '../src/host-compatibility.mjs';
 import { AGENTS_START, AGENTS_END } from '../src/templates.mjs';
 
 const fixtureCatalog = path.join(
@@ -25,13 +26,15 @@ const qwenFixture = path.join(
   'qwen-model-doc.html',
 );
 
-function customAgentHost() {
+function customAgentHost(version = '0.147.0') {
+  const compatibility = evaluateHostCompatibility({ version, multiAgent: true });
   return {
-    supported: true,
-    version: '0.147.0',
+    supported: compatibility.configurationInstallAllowed,
+    version,
     multiAgent: true,
     multiAgentV2: false,
-    reason: 'Codex reports multi_agent enabled',
+    compatibility,
+    reason: compatibility.reason,
   };
 }
 
@@ -97,6 +100,10 @@ test('dry-run writes nothing, apply is idempotent, verify is honest, and uninsta
     keychainReadyImpl: async () => true,
   });
   assert.equal(checked.configured, true);
+  assert.equal(checked.configurationReady, true);
+  assert.equal(checked.ready, true);
+  assert.equal(checked.discoverable, true);
+  assert.equal(checked.providerResolved, null);
   assert.equal(checked.runtimeVerified, false);
   assert.deepEqual(checked.agentEvidence.map((evidence) => ({
     providerRole: evidence.providerRole,
@@ -131,6 +138,45 @@ test('dry-run writes nothing, apply is idempotent, verify is honest, and uninsta
   await assert.rejects(fs.stat(applied.environment.agentPath), /ENOENT/);
   await assert.rejects(fs.stat(applied.manifestPath), /ENOENT/);
   await assert.rejects(fs.stat(applied.environment.runtimeDir), /ENOENT/);
+});
+
+test('installer allows blocked-Host analysis but fails before an active installation', async (t) => {
+  const fixture = await setup(t);
+  const blocked = {
+    ...fixture.options,
+    inspectCustomAgentHostImpl: async () => customAgentHost('0.149.0'),
+  };
+  const dry = await install(blocked);
+  assert.equal(dry.dryRun, true);
+  assert.equal(dry.customAgents.host.compatibility.level, 'LEVEL_C_HOST_BLOCKED');
+  await assert.rejects(
+    install({ ...blocked, apply: true }),
+    /Host cross-provider subagent installation is blocked/,
+  );
+  assert.equal(await fs.readFile(fixture.configToml, 'utf8'), fixture.sentinel);
+  await assert.rejects(fs.stat(path.join(fixture.codexDir, 'agents')), /ENOENT/);
+  await assert.rejects(fs.stat(path.join(fixture.codexDir, 'codex-third-party-workers-install.json')), /ENOENT/);
+  await assert.rejects(fs.stat(path.join(fixture.homeDir, 'fake-bridge')), /ENOENT/);
+});
+
+test('verifier keeps local configuration separate from a blocked 0.149 provider resolution', async (t) => {
+  const fixture = await setup(t);
+  await install({ ...fixture.options, apply: true });
+  const checked = await verify({
+    ...fixture.options,
+    inspectCustomAgentHostImpl: async () => customAgentHost('0.149.0'),
+    checkKeychain: true,
+    keychainReadyImpl: async () => true,
+  });
+  assert.equal(checked.configured, true);
+  assert.equal(checked.discoverable, true);
+  assert.equal(checked.providerResolved, false);
+  assert.equal(checked.taskDelivered, false);
+  assert.equal(checked.runtimeExecuted, false);
+  assert.equal(checked.runtimeVerified, false);
+  assert.equal(checked.configurationReady, false);
+  assert.equal(checked.ready, false);
+  assert.match(checked.issues.join('\n'), /Host cross-provider subagent host_blocked/);
 });
 
 test('explicit Pro install creates only the dedicated Pro worker and verifies it separately', async (t) => {

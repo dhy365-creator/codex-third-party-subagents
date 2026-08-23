@@ -6,8 +6,9 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-Delegate suitable Codex subagent tasks to lower-cost provider APIs while
-**Codex stays the main agent**.
+A version-scoped compatibility, installation, and verification layer for
+bounded third-party model handoffs in Codex, with **Codex retaining final
+review**.
 
 ![Codex Third-Party Subagents architecture](assets/hero-social-preview.png)
 
@@ -25,11 +26,44 @@ Delegate suitable Codex subagent tasks to lower-cost provider APIs while
   final acceptance. Provider failure safely returns routing to an available
   OpenAI worker.
 
+## Host Compatibility
+
+The required topology is OpenAI Codex Main -> third-party-provider child. It is
+compatible only when the exact Host contract allows a child role to select its
+own provider; `multi_agent=true` alone is not proof.
+
+- Codex CLI `0.147.0`: **HISTORICAL RUNTIME VERIFIED** for the recorded
+  DeepSeek Flash and explicit Pro paths. This is not a current claim or a
+  downgrade recommendation.
+- Codex CLI `0.149.x`, including `0.149.0`, and the current bundled Desktop
+  `0.149.0-alpha.4.1`: **HOST BLOCKED** because the `0.149` bounded role
+  contract inherits provider configuration from the parent.
+- `0.148.x` and every other unverified version: **UNKNOWN** and fail closed.
+
+Doctor and dry-run remain available. A blocked or unknown Host cannot apply an
+active cross-provider installation, create a provider bridge, route to a
+third-party child, or report runtime success. See the exact levels, field
+contract, and version matrix in [Host compatibility](docs/host-compatibility.md).
+
+### What Codex Provides Natively
+
+Codex owns Custom Agent discovery, child spawn/follow-up orchestration,
+supported OpenAI per-agent model and instruction overrides, and parent-level
+custom-provider/auth primitives. This project does not claim to register or
+replace those native capabilities.
+
+### What This Project Adds
+
+Reviewed provider packs, command-backed Keychain authentication, a
+version-scoped Host gate, read-only Doctor, dry-run-first installer, verifier,
+owner-only task bridge, migration safety, fallback boundaries, and scoped E2E
+evidence.
+
 ## Current provider status
 
 | Built-in provider pack | Current evidence |
 | --- | --- |
-| DeepSeek V4 Flash | Built-in; controlled maintainer E2E passed (Level 3); generic user acceptance pending |
+| DeepSeek V4 Flash | Built-in; **historical** controlled maintainer E2E passed on exact Host `0.147.0`; generic user acceptance pending |
 | MiniMax-M3 | API, CLI, and Codex Desktop runtime verified |
 | Alibaba Model Studio Qwen3.7-Max | API, CLI, and Codex Desktop runtime verified |
 
@@ -39,7 +73,8 @@ candidate listing is not proof of support; see the
 
 DeepSeek V4 Pro is an explicit-only Custom Agent configuration profile
 (`--model pro`), not an automatic fallback. A controlled maintainer coding
-fixture E2E passed with attributable Host/provider/model metadata; public-installer
+fixture E2E passed historically on exact Host `0.147.0` with attributable
+Host/provider/model metadata; public-installer
 and independent user acceptance remain unverified. See the
 [Custom Agents migration guide](docs/migration/custom-agents.md) and the
 [sanitized Custom Subagents runtime record](docs/validation/deepseek-custom-subagents-runtime-e2e-2026-08-16.md).
@@ -49,6 +84,7 @@ and independent user acceptance remain unverified. See the
 - [Quick Start](#quick-start)
 - [Doctor](#doctor)
 - [Architecture](docs/architecture.md)
+- [Host Compatibility](docs/host-compatibility.md)
 - [Custom Agents migration](docs/migration/custom-agents.md)
 - [Provider Compatibility](docs/provider-compatibility.md)
 - [DeepSeek controlled runtime E2E](docs/validation/deepseek-runtime-e2e-2026-08-16.md)
@@ -88,6 +124,8 @@ node scripts/install.mjs \
 The installer remains a dry-run unless you explicitly add `--apply`. Review its
 plan first, then see the [complete install guide](#requirements), restart Codex
 Desktop after applying, and run `npm run verify -- --provider deepseek`.
+On a blocked or unknown Host, stop at Doctor/dry-run: `--apply` intentionally
+fails closed before an active provider installation.
 
 Do not put API keys, credentials, private task text, private filesystem paths,
 or sensitive data in issues, logs, or screenshots.
@@ -101,7 +139,8 @@ layer, or evidence that a lower-cost model will produce a better result.
 
 - Read-only.
 - No file mutations and no paid provider calls.
-- Checks Custom Agent capability, identity, duplicates, and migration state.
+- Separately checks native multi-agent availability and cross-provider Host
+  compatibility, plus identity, duplicates, and migration state.
 - Good for triage before any provider delegation or installer action.
 
 ## Verified Codex Desktop run
@@ -114,8 +153,8 @@ is included.
 ![Sanitized verified Codex Desktop provider worker transcript](assets/terminal-demo.png)
 
 MiniMax-M3 and Qwen3.7-Max have passed real API, CLI, and Codex Desktop checks.
-DeepSeek V4 Flash and the explicit-only V4 Pro profile have each passed a
-bounded maintainer coding-fixture E2E in a new Host session: the selected Custom
+DeepSeek V4 Flash and the explicit-only V4 Pro profile each passed a historical,
+bounded maintainer coding-fixture E2E on exact Host `0.147.0`: the selected Custom
 Subagent reproduced the failing tests, identified the exact one-line fix, used
 the expected provider/model, completed and released the bridge, and was reviewed
 by the main thread. This is Level 3 evidence for those controlled paths, not a
@@ -128,8 +167,8 @@ continues to report `runtimeVerified: false`.
 
 | Direct provider path | Current evidence |
 | --- | --- |
-| DeepSeek V4 Flash | Built-in; controlled maintainer E2E passed (Level 3); verifier remains conservative |
-| DeepSeek V4 Pro | Explicit-only Custom Agent profile; controlled maintainer E2E passed (Level 3); never auto-routed |
+| DeepSeek V4 Flash | Built-in; historical controlled E2E passed on exact Host `0.147.0`; verifier remains conservative |
+| DeepSeek V4 Pro | Explicit-only Custom Agent profile; historical controlled E2E passed on exact Host `0.147.0`; never auto-routed |
 | MiniMax-M3 | Built-in; Desktop runtime verified |
 | Alibaba Model Studio Qwen3.7-Max | Built-in; Desktop runtime verified |
 | StepFun Responses models | Candidate; not runtime tested |
@@ -163,7 +202,8 @@ final decision.
 
 ![Validation and security proof](assets/validation-proof.png)
 
-- `79/79` isolated local tests pass on the current branch, including Custom
+- `91/91` isolated local tests pass on the current branch, including Host
+  compatibility gates, Custom
   Agent schema, duplicate, migration, rollback, and project identity-shadowing
   coverage.
 - GitHub Actions runs the same suite on macOS with Node.js 20 for pushes and
@@ -311,10 +351,15 @@ and run:
 node scripts/verify.mjs
 ```
 
-Verification distinguishes two states:
+Verification distinguishes local configuration, Host, and runtime states:
 
 - `configured: true`: installed files, permissions, hashes, catalog bounds,
-  manifest markers, and Keychain presence are valid.
+  manifest markers, and any requested credential check are valid locally; this
+  does not prove provider runtime.
+- `discoverable`, `providerResolved`, `taskDelivered`, and `runtimeExecuted`
+  are reported separately instead of being inferred from a TOML file.
+- `configurationReady` requires both local integrity and a compatible Host;
+  `ready` additionally requires the Keychain credential check.
 - `runtimeVerified: false`: the verifier does not auto-promote a controlled
   runtime observation. It stays false until this project defines and records a
   separate, independently accepted runtime-evidence policy.
@@ -404,8 +449,9 @@ sensitive vulnerability details in a public issue.
 
 ## Official references
 
-- [OpenAI: Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents)
-- [OpenAI: Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
+- [OpenAI: Subagents](https://developers.openai.com/codex/subagents)
+- [OpenAI: Codex configuration reference](https://developers.openai.com/codex/config-reference)
+- [OpenAI: bounded agent-role overrides](https://github.com/openai/codex/pull/39299)
 - [DeepSeek: Codex integration](https://api-docs.deepseek.com/zh-cn/quick_start/agent_integrations/codex/)
 - [DeepSeek: Responses API compatibility](https://api-docs.deepseek.com/zh-cn/guides/responses_api/)
 - [MiniMax: M3 in Codex](https://platform.minimaxi.com/docs/token-plan/codex)

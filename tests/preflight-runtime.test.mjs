@@ -4,6 +4,26 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { runPreflight } from '../src/preflight-runtime.mjs';
+import { evaluateHostCompatibility } from '../src/host-compatibility.mjs';
+
+function customAgentHost(version = '0.147.0') {
+  const compatibility = evaluateHostCompatibility({ version, multiAgent: true });
+  return {
+    supported: compatibility.configurationInstallAllowed,
+    version,
+    multiAgent: true,
+    multiAgentV2: false,
+    compatibility,
+    reason: compatibility.reason,
+  };
+}
+
+function withCompatibleHost(overrides = {}) {
+  return {
+    inspectCustomAgentHostImpl: async () => customAgentHost(),
+    ...overrides,
+  };
+}
 
 function rateLimits({ sparkUsed = 100, generalUsed = 95 } = {}) {
   return {
@@ -108,12 +128,12 @@ function input(overrides = {}) {
 test('preflight prepares DeepSeek only after Spark is exhausted and quota is low', async (t) => {
   const config = await fixture(t);
   let bridgeRequest;
-  const result = await runPreflight(input(), config, {
+  const result = await runPreflight(input(), config, withCompatibleHost({
     readRateLimits: async () => rateLimits(),
     keychainReadyImpl: async () => true,
     bridgeBusyImpl: async () => false,
     createBridgeImpl: async (request) => { bridgeRequest = request; },
-  });
+  }));
   assert.equal(result.agentType, 'deepseek_worker');
   assert.equal(result.action, 'spawn');
   assert.equal(result.bridgePrepared, true);
@@ -129,13 +149,13 @@ test('preflight prepares DeepSeek only after Spark is exhausted and quota is low
 
 test('preflight accepts legacy deepseekSuitable compatibility flag', async (t) => {
   const config = await fixture(t);
-  const result = await runPreflight(input(), config, {
+  const result = await runPreflight(input(), config, withCompatibleHost({
     readRateLimits: async () => rateLimits(),
     keychainReadyImpl: async () => true,
     bridgeBusyImpl: async () => false,
     createBridgeImpl: async () => {},
     providerSuitable: undefined,
-  });
+  }));
   assert.equal(result.bridgePrepared, true);
 });
 
@@ -150,12 +170,12 @@ test('project Custom Agent layer forces OpenAI fallback before bridge creation',
     'name = "deepseek_worker"\n',
   );
   let bridgeCreated = false;
-  const result = await runPreflight(input({ cwd: project }), config, {
+  const result = await runPreflight(input({ cwd: project }), config, withCompatibleHost({
     readRateLimits: async () => rateLimits(),
     keychainReadyImpl: async () => true,
     bridgeBusyImpl: async () => false,
     createBridgeImpl: async () => { bridgeCreated = true; },
-  });
+  }));
   assert.equal(result.agentType, 'luna_worker');
   assert.equal(result.bridgePrepared, false);
   assert.equal(bridgeCreated, false);
@@ -164,34 +184,34 @@ test('project Custom Agent layer forces OpenAI fallback before bridge creation',
 
 test('project Custom Agent inspection error also fails closed', async (t) => {
   const config = await fixture(t);
-  const result = await runPreflight(input(), config, {
+  const result = await runPreflight(input(), config, withCompatibleHost({
     readRateLimits: async () => rateLimits(),
     keychainReadyImpl: async () => true,
     bridgeBusyImpl: async () => false,
     inspectProjectAgentLayersImpl: async () => { throw new Error('unreadable'); },
-  });
+  }));
   assert.equal(result.agentType, 'luna_worker');
   assert.equal(result.bridgePrepared, false);
 });
 
 test('quota lookup failure keeps the requested OpenAI worker', async (t) => {
   const config = await fixture(t);
-  const result = await runPreflight(input(), config, {
+  const result = await runPreflight(input(), config, withCompatibleHost({
     readRateLimits: async () => { throw new Error('offline'); },
     keychainReadyImpl: async () => true,
     bridgeBusyImpl: async () => false,
-  });
+  }));
   assert.equal(result.agentType, 'spark-worker');
   assert.equal(result.bridgePrepared, false);
 });
 
 test('busy bridge safely falls back to Luna', async (t) => {
   const config = await fixture(t);
-  const result = await runPreflight(input(), config, {
+  const result = await runPreflight(input(), config, withCompatibleHost({
     readRateLimits: async () => rateLimits(),
     keychainReadyImpl: async () => true,
     bridgeBusyImpl: async () => true,
-  });
+  }));
   assert.equal(result.agentType, 'luna_worker');
   assert.equal(result.bridgePrepared, false);
 });
@@ -203,13 +223,13 @@ test('bridge-compatible DeepSeek followup reuses its existing target', async (t)
     operation: 'followup',
     existingAgentType: 'deepseek_worker',
     target: '/root/existing_task',
-  }), config, {
+  }), config, withCompatibleHost({
     readRateLimits: async () => rateLimits(),
     keychainReadyImpl: async () => true,
     bridgeBusyImpl: async () => false,
     hasArchivedImpl: async () => true,
     createBridgeImpl: async (request) => { bridgeRequest = request; },
-  });
+  }));
   assert.equal(result.action, 'followup');
   assert.equal(result.target, '/root/existing_task');
   assert.equal(bridgeRequest.taskName, '/root/existing_task');
@@ -219,12 +239,12 @@ test('explicit Pro worker is allowed only after its configured profile is ready'
   const config = await fixture(t);
   await configureProProfile(config);
   let bridgeRequest;
-  const result = await runPreflight(input({ requestedAgent: 'deepseek_pro_worker' }), config, {
+  const result = await runPreflight(input({ requestedAgent: 'deepseek_pro_worker' }), config, withCompatibleHost({
     readRateLimits: async () => rateLimits({ sparkUsed: 0, generalUsed: 0 }),
     keychainReadyImpl: async () => true,
     bridgeBusyImpl: async () => false,
     createBridgeImpl: async (request) => { bridgeRequest = request; },
-  });
+  }));
   assert.equal(result.agentType, 'deepseek_pro_worker');
   assert.equal(result.reason, 'explicit-provider-ready');
   assert.equal(result.bridgePrepared, true);
@@ -255,11 +275,44 @@ test('automatic low-quota fallback never selects Pro', async (t) => {
   await configureProProfile(config);
   const flash = config.profiles.find((profile) => profile.id === 'flash');
   await fs.unlink(flash.agentPath);
-  const result = await runPreflight(input(), config, {
+  const result = await runPreflight(input(), config, withCompatibleHost({
     readRateLimits: async () => rateLimits(),
     keychainReadyImpl: async () => true,
     bridgeBusyImpl: async () => false,
-  });
+  }));
   assert.equal(result.agentType, 'luna_worker');
   assert.equal(result.bridgePrepared, false);
+});
+
+test('0.149 Host gate prevents provider bridge creation before routing', async (t) => {
+  const config = await fixture(t);
+  let bridgeCreated = false;
+  let providerInspected = false;
+  const result = await runPreflight(input(), config, {
+    inspectCustomAgentHostImpl: async () => customAgentHost('0.149.0'),
+    keychainReadyImpl: async () => { providerInspected = true; return true; },
+    createBridgeImpl: async () => { bridgeCreated = true; },
+  });
+  assert.equal(result.agentType, 'spark-worker');
+  assert.equal(result.bridgePrepared, false);
+  assert.equal(providerInspected, false);
+  assert.equal(bridgeCreated, false);
+  assert.equal(result.hostCompatibility.level, 'LEVEL_C_HOST_BLOCKED');
+  assert.match(result.reason, /host cross-provider subagent host_blocked/);
+});
+
+test('blocked Host denies an explicit provider request instead of falling back silently', async (t) => {
+  const config = await fixture(t);
+  let bridgeCreated = false;
+  const result = await runPreflight(input({ requestedAgent: 'deepseek_worker' }), config, {
+    inspectCustomAgentHostImpl: async () => customAgentHost('0.149.0'),
+    createBridgeImpl: async () => { bridgeCreated = true; },
+  });
+  assert.equal(result.decision, 'deny');
+  assert.equal(result.action, 'deny');
+  assert.equal(result.agentType, undefined);
+  assert.equal(result.bridgePrepared, undefined);
+  assert.equal(bridgeCreated, false);
+  assert.equal(result.hostCompatibility.level, 'LEVEL_C_HOST_BLOCKED');
+  assert.match(result.reason, /host cross-provider subagent host_blocked/);
 });

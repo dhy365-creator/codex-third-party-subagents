@@ -127,6 +127,7 @@ function summarizeInstall(result) {
     catalogAcquired: result.catalogAcquired,
     keychainVerified: result.keychainVerified,
     customAgents: result.customAgents,
+    hostCompatibility: result.customAgents?.host?.compatibility ?? null,
     migration: result.migration,
     profile: result.profile,
     profiles: result.profiles,
@@ -137,15 +138,22 @@ function summarizeInstall(result) {
 export function summarizeVerify(result) {
   const summary = {
     configured: result.configured,
+    discoverable: result.discoverable,
+    providerResolved: result.providerResolved,
+    taskDelivered: result.taskDelivered,
+    runtimeExecuted: result.runtimeExecuted,
     runtimeVerified: result.runtimeVerified,
+    configurationReady: result.configurationReady,
+    ready: result.ready,
     credentialReady: result.credentialReady,
+    hostCompatibility: result.hostCompatibility,
     profile: result.profile,
     agentEvidence: result.agentEvidence,
     runtimeEvidence: result.runtimeEvidence,
     issues: result.issues,
     warnings: result.warnings,
   };
-  if (result.configured === true && result.credentialReady === true) {
+  if (result.ready === true && result.credentialReady === true) {
     summary.POST_INSTALL_STATUS = 'SUCCESS';
   }
   return summary;
@@ -179,7 +187,7 @@ export function verifyCli(argv = process.argv.slice(2)) {
       model: parsed.model,
     });
     process.stdout.write(`${JSON.stringify(summarizeVerify(result), null, 2)}\n`);
-    if (!result.configured) process.exitCode = 1;
+    if (!result.ready) process.exitCode = 1;
   });
 }
 

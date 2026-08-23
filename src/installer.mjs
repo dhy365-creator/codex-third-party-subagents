@@ -20,6 +20,7 @@ import {
   inspectCustomAgentDefinitions,
   inspectCustomAgentHost,
 } from './custom-agents.mjs';
+import { publicHostCompatibility } from './host-compatibility.mjs';
 import {
   listProviderPackProfiles,
   resolveProviderPack,
@@ -52,6 +53,7 @@ const RUNTIME_FILES = [
   'custom-agents.mjs',
   'environment.mjs',
   'fs-utils.mjs',
+  'host-compatibility.mjs',
   'keychain.mjs',
   'preflight-runtime.mjs',
   'provider-packs.mjs',
@@ -187,6 +189,7 @@ function customAgentSummary(host, definitions, expected, migration) {
       multiAgent: host.multiAgent,
       multiAgentV2: host.multiAgentV2,
       reason: host.reason,
+      compatibility: publicHostCompatibility(host.compatibility),
     },
     expected: expected.map((definition) => ({
       name: definition.name,
@@ -333,8 +336,8 @@ export async function install(options = {}) {
   });
   const customAgentConflict = migration.conflicts.length > 0
     || customAgentDefinitionsState.issues.length > 0;
-  if (!dryRun && customAgentHost.supported !== true) {
-    throw new Error('Codex Custom Agents are not confirmed available; update or enable multi-agent before --apply');
+  if (!dryRun && customAgentHost.compatibility?.configurationInstallAllowed !== true) {
+    throw new Error(`Host cross-provider subagent installation is blocked: ${customAgentHost.reason}`);
   }
   if (!dryRun && customAgentConflict) {
     throw new Error('custom-agent identity conflict detected; resolve duplicates before --apply');
@@ -433,6 +436,7 @@ export async function install(options = {}) {
     })),
     defaultProviderRole,
     customAgents: expectedCustomAgents,
+    hostCompatibility: publicHostCompatibility(customAgentHost.compatibility),
     providerCapabilities: Array.from(providerPack.capabilities.supported.values()),
   };
 
@@ -514,6 +518,7 @@ export async function install(options = {}) {
         model: profile.model,
       })),
       customAgents: expectedCustomAgents,
+      hostCompatibility: publicHostCompatibility(customAgentHost.compatibility),
       legacyMigration: migration.applied ? migration.candidates : [],
     },
     options: {
@@ -531,6 +536,7 @@ export async function install(options = {}) {
       })),
       defaultProviderRole,
       customAgents: expectedCustomAgents,
+      hostCompatibility: publicHostCompatibility(customAgentHost.compatibility),
       legacyMigration: migration.applied ? migration.candidates : [],
       mainModelPreserved: true,
       delegatedDataConsent: true,

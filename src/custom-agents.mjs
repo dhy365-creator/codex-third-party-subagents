@@ -3,6 +3,11 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import {
+  evaluateHostCompatibility,
+  HOST_COMPATIBILITY_LEVELS,
+  normalizeCodexVersion,
+} from './host-compatibility.mjs';
 
 const execFile = promisify(execFileCallback);
 const REQUIRED_FIELDS = Object.freeze(['name', 'description', 'developer_instructions']);
@@ -101,7 +106,7 @@ function featureState(output, feature) {
 }
 
 function versionFrom(output) {
-  return String(output).match(/codex-cli\s+(\d+\.\d+\.\d+)/iu)?.[1] ?? null;
+  return normalizeCodexVersion(output);
 }
 
 async function defaultCommandRunner(command, args) {
@@ -116,41 +121,54 @@ async function defaultCommandRunner(command, args) {
 export async function inspectCustomAgentHost({
   codexPath = 'codex',
   commandRunner = defaultCommandRunner,
+  roleProviderOverride,
 } = {}) {
   let versionOutput;
   try {
     versionOutput = await commandRunner(codexPath, ['--version']);
   } catch {
+    const compatibility = evaluateHostCompatibility();
     return {
       supported: null,
       version: null,
       multiAgent: null,
       multiAgentV2: null,
-      reason: 'Codex CLI version could not be read',
+      compatibility,
+      reason: compatibility.reason,
     };
   }
   let featureOutput;
   try {
     featureOutput = await commandRunner(codexPath, ['features', 'list']);
   } catch {
+    const version = versionFrom(versionOutput);
+    const compatibility = evaluateHostCompatibility({ version });
     return {
       supported: null,
-      version: versionFrom(versionOutput),
+      version,
       multiAgent: null,
       multiAgentV2: null,
-      reason: 'Codex multi-agent feature state could not be read',
+      compatibility,
+      reason: compatibility.reason,
     };
   }
   const multiAgent = featureState(featureOutput, 'multi_agent');
   const multiAgentV2 = featureState(featureOutput, 'multi_agent_v2');
+  const version = versionFrom(versionOutput);
+  const compatibility = evaluateHostCompatibility({
+    version,
+    multiAgent,
+    roleProviderOverride,
+  });
   return {
-    supported: multiAgent === true,
-    version: versionFrom(versionOutput),
+    supported: compatibility.configurationInstallAllowed
+      ? true
+      : compatibility.level === HOST_COMPATIBILITY_LEVELS.HOST_BLOCKED ? false : null,
+    version,
     multiAgent,
     multiAgentV2,
-    reason: multiAgent === true
-      ? 'Codex reports multi_agent enabled'
-      : 'Codex does not report multi_agent enabled',
+    compatibility,
+    reason: compatibility.reason,
   };
 }
 
