@@ -1,6 +1,24 @@
 # 当前状态
 
-最后更新：2026-08-23
+最后更新：2026-08-24
+
+## External Transport Phase 1 production adapter（本地 checkpoint）
+
+- 基于正式架构 commit `502cd981b2c39ed37ae6252a2d7730c67f255b1a`
+  在独立分支实现 production `External Codex` adapter；未修改 Spike checkpoint，也未混入
+  原 main worktree 的 catalog safety / HTML material。
+- 新增 `src/transports/` 正式模块，覆盖 adapter contract、最小隔离配置、argv-safe launcher、
+  lifecycle supervisor、single-slot、严格 result/evidence parser、workspace/parent snapshot、
+  centralized redaction 与 owner-only atomic archive；production `src/**` 不依赖 Spike。
+- 每次执行使用独立 `CODEX_HOME`、最小 env allowlist、`0700` 目录和 `0600` 文件；只允许
+  `read-only` / `workspace-write`，明确拒绝 `danger-full-access`。凭据保持
+  command-backed Keychain contract，adapter 不读取 secret value。
+- `external-codex` registry 明确为 `enabled: false` / `factory: null`，production execution
+  fail closed；仅本地 dependency-injected fake child 测试可直连 adapter。Installer、Doctor、
+  Verifier、Preflight、active routing/bridge、Native path 与 fallback/provider policy 均未接入或改变。
+- 新增 37 项 production adapter/fake-child 测试；完整本地 `npm test` 为 `158/158` PASS。
+  本阶段第三方 live request 为 `0`，fixture evidence 不提升 `runtimeVerified`，package version、
+  README support claim 与发布状态不变。
 
 ## External Transport 正式架构（本地 checkpoint）
 

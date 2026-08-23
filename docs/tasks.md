@@ -2,6 +2,13 @@
 
 ## 已完成（local / verified）
 
+- [x] 2026-08-24 基于 `502cd981` 完成 External Transport Phase 1 production adapter：
+  isolated config/home、safe launcher/supervisor、strict result/evidence、central redaction、
+  atomic archive 与 single-slot 均由 37 项 local fake-child 测试覆盖；完整 `npm test`
+  `158/158` PASS，第三方 live request 为 `0`。
+- [x] Phase 1 registry 保持 `enabled: false` / `factory: null`，production `src/**` 不依赖
+  Spike；Installer、Doctor、Verifier、Preflight、active routing/bridge、Native path、fallback、
+  package version 与 README support claim 均未改变。
 - [x] 2026-08-23 从 `956b193` External Child runtime checkpoint 建立独立 Formal
   External Transport Architecture 分支，未混入原 main 的 catalog/HTML 修改。
 - [x] 定义 provider-neutral Transport request/result/adapter、Evidence 与 lifecycle
@@ -74,8 +81,9 @@
 
 ## External Transport 分阶段实施
 
-- [ ] Phase 1：productionize provider-neutral External adapter、isolated config、lifecycle、
-  result/evidence 与 fake-process 安全测试；保持 active routing disabled。
+- [x] Phase 1：productionize provider-neutral External adapter、isolated config、lifecycle、
+  result/evidence 与 fake-process 安全测试；active routing 保持 disabled，production registry
+  无 factory，`runtimeVerified` 未由 fixture 提升。
 - [ ] Phase 2：接入 Doctor/Verifier/Preflight/Installer contract 与 feature gate；普通检查保持
   read-only/non-billable，maintainer evidence 与 local installation 分开。
 - [ ] Phase 3：在明确 `BILLABLE PROVIDER REQUEST` 与用户授权下完成 DeepSeek Flash

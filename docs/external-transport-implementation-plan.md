@@ -1,8 +1,8 @@
 # External transport phased implementation plan
 
-Status: approved architecture plan. No phase is implemented or activated by
-this document. Every phase requires a separate branch, checkpoint, tests, and
-acceptance decision.
+Status: approved architecture plan. Phase 1 is implemented at a local disabled
+checkpoint; it is not activated or integrated. Every later phase requires a
+separate branch, checkpoint, tests, and acceptance decision.
 
 ## Global gates
 
@@ -40,6 +40,14 @@ Every phase must preserve:
   forced-kill, orphan, result-size, and single-slot tests;
 - no provider network request;
 - full repository suite and security/path scans pass.
+
+### Local outcome
+
+Completed on 2026-08-24 with 37 local fake-child tests. The full repository
+suite is `158/158` PASS, third-party live requests are `0`, production source
+has no Spike dependency, and active routing/control-plane behavior is
+unchanged. Runtime evidence produced by fixtures remains
+`runtimeVerified: false`.
 
 ### Checkpoint
 
@@ -193,7 +201,9 @@ runtime state.
 These are resolved during their owning phase without weakening architecture
 invariants:
 
-1. Raw private evidence retention duration and user cleanup command (Phase 1).
+1. Raw private evidence retention duration and user cleanup command (Phase 2 or
+   Phase 6 before activation). Phase 1 preserves owner-only execution evidence
+   and immutable portable archives; it exposes no cleanup CLI.
 2. Exact project/user policy surface for authorizing billable External execution
    (Phase 2).
 3. Version-range promotion beyond exact Codex CLI `0.149.0` (Phase 3, only after

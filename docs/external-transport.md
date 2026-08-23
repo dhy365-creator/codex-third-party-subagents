@@ -1,8 +1,9 @@
 # External Codex transport architecture
 
-Status: formal architecture decision; not connected to active production
-routing. Current Installer, Doctor, Verifier, Preflight, and bridge behavior is
-unchanged.
+Status: formal architecture plus a local Phase 1 production-adapter checkpoint.
+The adapter modules exist, but their registry entry is disabled and has no
+factory. They are not connected to active routing. Current Installer, Doctor,
+Verifier, Preflight, bridge, and Native behavior is unchanged.
 
 ## Model
 
@@ -44,6 +45,25 @@ exact Codex CLI `0.149.0`.
 
 That evidence does not activate production routing, prove a clean public
 installation, or represent independent-user acceptance.
+
+### Phase 1 production checkpoint
+
+Phase 1 implements `createExternalCodexTransport(options)` with
+`describe`, `prepare`, `execute`, `cancel`, `collect`, and `cleanup`. The
+implementation is provider-neutral at its transport boundary and resolves only
+provider/model tuples already allowed by the built-in provider packs.
+
+The production modules cover isolated config, launcher/supervision, filesystem
+safety, strict result and runtime-evidence parsing, centralized redaction,
+owner-only archives, and the single active slot. The registry in
+`src/transports/index.mjs` reports `enabled: false` and `factory: null`;
+`resolveEnabledTransportFactory("external-codex")` fails with
+`EXTERNAL_TRANSPORT_DISABLED`. Direct execution is available only through
+dependency-injected local test fixtures and is not a user-facing flag.
+
+Importing, constructing, describing, preparing, or validating the adapter does
+not start a child. Production `execute` remains blocked. Phase 1 made no
+third-party provider request and did not add a retry path.
 
 ## Adapter sequence
 
@@ -88,33 +108,30 @@ configuration or result self-report.
 
 ### Cleanup
 
-Cleanup redacts task body and `cwd`, atomically archives completed/failed state,
-releases the active slot, closes files, verifies the process group is gone, and
-ends in lifecycle state `closed`. Raw private evidence follows an explicit
-retention policy; it is never silently copied into public docs.
+Cleanup redacts task body and `cwd` from the portable archive, atomically
+archives completed/failed/timed-out/cancelled state, releases the active slot
+only after archive finalization, verifies the process group is gone, and ends
+in lifecycle state `closed`. Necessary private evidence remains local in the
+owner-only execution tree; normal cleanup preserves the immutable archive and
+never copies private evidence into public docs.
 
 ## Spike extraction boundary
 
-The following Spike concerns may be productionized behind the formal contract
-after focused review:
+Phase 1 reimplemented reviewed generic behavior behind the formal contract. No
+production module imports `spikes/external-child/**`.
 
-- minimal config generation;
-- task-envelope validation and stdin prompt construction;
-- runtime attribution and credential scanning;
-- owner-only filesystem safety;
-- independent launcher;
-- result validation;
-- process supervisor;
-- parent/workspace snapshots.
+| Spike concern | Production module | Reused concept | Not carried forward |
+| --- | --- | --- | --- |
+| config | `external-config.mjs` | minimal provider config and command-backed auth | live readiness shortcuts and provider-specific runner state |
+| envelope | `transport-contract.mjs`, `external-result.mjs` | strict request validation and stdin prompt | fixture acceptance shortcuts and parent history |
+| evidence | `external-evidence.mjs`, `external-redaction.mjs` | attributable session/turn evidence and credential scanning | result self-report as proof and live report evidence |
+| filesystem safety | `external-fs-safety.mjs`, `external-archive.mjs` | owner-only paths, scope checks, snapshots, atomic archives | disposable-workspace assumptions and bridge coupling |
+| launcher/supervisor | `external-process.mjs` | argv-safe spawn, bounded output, timeout/cancel/process-group cleanup | probe sequencing, hidden retry, and live orchestration |
+| result | `external-result.mjs` | strict bounded child result | provider-specific constants and permissive fields |
+| collection/snapshots | `external-collection.mjs` | workspace/parent isolation and evidence references | one-off report summaries |
 
-These are test utilities and must not enter production:
-
-- disposable fixture creation;
-- probe sequencing and acceptance shortcuts;
-- `run-spike.mjs`.
-
-No Spike module is copied directly. Phase 1 extracts only reviewed generic
-behavior with new production names, dependencies, tests, and error contracts.
+Disposable fixture generation, probe sequencing, report generation, one-off
+evidence scripts, live probe orchestration, and `run-spike.mjs` remain Spike-only.
 
 ## Isolation and credentials
 
