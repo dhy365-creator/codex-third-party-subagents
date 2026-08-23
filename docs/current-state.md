@@ -2,6 +2,26 @@
 
 最后更新：2026-08-24
 
+## External Transport Phase 2 control plane（本地 checkpoint）
+
+- 基于 Phase 1 commit `4f0a10a7719426bd9b73d664250ac1489a5ae2c5` 在独立
+  worktree/branch 接入 control plane；原 main worktree 的 catalog safety、HTML 与状态文档
+  修改未混入。
+- 新增 `transport-control-plane`、`transport-readiness` 与 `transport-verification`：
+  Doctor 分开报告 Native/External，Verifier 分开配置/发现/Provider/runtime evidence，
+  Preflight 只返回 `ALLOW|BLOCK|REQUIRE_EXPLICIT|BUSY`，Installer dry-run 描述
+  `auto|native|external`。
+- 当前 Codex `0.149.x` Native 继续 `BLOCKED`。External adapter registry 仍为
+  `enabled: false` / `factory: null`，Phase 2 feature gate 与 runtime-route gate 也为
+  `false`；External `--apply` 在 catalog、Keychain 与写入前 fail closed，active bridge
+  只接受 Native `ALLOW`。
+- Flash 的 controlled maintainer evidence 与本机安装 evidence 严格分开；result 自报不能
+  证明 Provider。Pro 继续 explicit-only 且 External evidence 为 `UNKNOWN`；MiniMax/Qwen
+  External evidence 也未扩大。无可接受本机证据时 `runtimeVerified` 保持 `false`。
+- 完整本地 `npm test` 为 `189/189` PASS；本阶段第三方 live request 为 `0`。package
+  version 仍为 `0.4.0-beta.2`，README availability claim、发布状态与现有 Provider/fallback/
+  migration/uninstall policy 未提升或改变。
+
 ## External Transport Phase 1 production adapter（本地 checkpoint）
 
 - 基于正式架构 commit `502cd981b2c39ed37ae6252a2d7730c67f255b1a`
@@ -173,7 +193,9 @@
 ## 尚未完成或未声称
 
 - 当前 CLI `0.149.0` 与 bundled Desktop `0.149.0-alpha.4.1` 不支持本项目所需的
-  OpenAI Main -> third-party Provider child topology；尚未选择下一阶段架构方向。
+  Native OpenAI Main -> third-party Provider child topology。External 方向已完成正式架构、
+  Phase 1 adapter 与 Phase 2 control plane，但 public runtime route 仍禁用；Phase 3 需另行
+  明确授权后才能做 feature-gated Flash production E2E。
 - `0.148.x` 没有可归因的项目 Host evidence，保持 Level D Unknown；不得自动宣告兼容。
 - 已完成 Flash 与显式 Pro 的受控维护者 E2E，但尚未取得独立真实用户验收；验证器仍不会把
   外部记录自动写成 `runtimeVerified: true`。

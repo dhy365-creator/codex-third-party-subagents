@@ -3,12 +3,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { discoverEnvironment, DEFAULT_PROVIDER_ID } from './environment.mjs';
 import { keychainReady } from './keychain.mjs';
-import { resolveProviderPack } from './provider-packs.mjs';
+import { resolveProviderPack, RUNTIME_NAMESPACE } from './provider-packs.mjs';
 import {
   inspectCustomAgentDefinitions,
   inspectCustomAgentHost,
 } from './custom-agents.mjs';
 import { verify } from './verifier.mjs';
+import {
+  externalReadinessChecks,
+  inspectExternalTransportReadiness,
+} from './transport-readiness.mjs';
 
 const STATUS = Object.freeze({ PASS: 'PASS', WARN: 'WARN', BLOCKED: 'BLOCKED' });
 const VALUE_FLAGS = new Set(['provider', 'model']);
@@ -230,6 +234,21 @@ export async function runDoctor(options = {}) {
       'cross-provider Host compatibility is unknown; active installation is blocked');
     add(checks, 'Multi-agent configuration', STATUS.WARN, 'cannot establish the active multi-agent configuration');
   }
+  const nativeTransport = Object.freeze({
+    transport: 'native',
+    eligible: customAgentHost?.compatibility?.automaticRoutingAllowed === true,
+    runtimeVerified: customAgentHost?.compatibility?.automaticRoutingAllowed === true,
+    compatibilityLevel: customAgentHost?.compatibility?.level ?? 'LEVEL_D_UNKNOWN',
+    hostVersion: customAgentHost?.version ?? null,
+    reason: customAgentHost?.compatibility?.reason
+      ?? 'Native cross-provider Host compatibility is unknown',
+  });
+  add(
+    checks,
+    'Native Transport eligibility',
+    nativeTransport.eligible ? STATUS.PASS : STATUS.BLOCKED,
+    nativeTransport.reason,
+  );
 
   if (providerPack) {
     try {
@@ -320,6 +339,7 @@ export async function runDoctor(options = {}) {
       ? 'luna_worker definition detected'
       : 'luna_worker was not detected; confirm Spark or Luna availability before install');
 
+  let credentialReady = null;
   if (providerPack && platform === 'darwin') {
     try {
       const present = await (options.keychainReadyImpl ?? keychainReady)({
@@ -329,13 +349,32 @@ export async function runDoctor(options = {}) {
         env: options.env ?? process.env,
         execFileImpl: options.execFileImpl,
       });
+      credentialReady = present;
       add(checks, 'Keychain credential', present ? STATUS.PASS : STATUS.BLOCKED,
         `provider credential is ${present ? 'present' : 'missing'}`);
     } catch {
+      credentialReady = false;
       add(checks, 'Keychain credential', STATUS.BLOCKED, 'provider credential is missing');
     }
   } else {
     add(checks, 'Keychain credential', STATUS.WARN, 'credential check is unavailable');
+  }
+
+  let externalReadiness = null;
+  if (providerPack) {
+    externalReadiness = await inspectExternalTransportReadiness({
+      providerPack,
+      customAgentHost,
+      codexDetected,
+      runtimeRoot: path.join(baseEnv.codexDir, 'external-transports', RUNTIME_NAMESPACE),
+      permissionProfile: options.permissionProfile ?? 'read-only',
+      credentialReady,
+      externalEvidence: options.externalTransportEvidence ?? null,
+    });
+    checks.push(...externalReadinessChecks(externalReadiness));
+  } else {
+    add(checks, 'External Transport eligibility', STATUS.BLOCKED,
+      'provider/model/role tuple is unavailable');
   }
 
   if (installState.installed && providerPack && installedProvider === providerId) {
@@ -377,6 +416,7 @@ export async function runDoctor(options = {}) {
     profile: providerPack?.profile ?? null,
     installed: installState.installed,
     customAgentHost,
+    transports: Object.freeze({ native: nativeTransport, external: externalReadiness }),
     checks,
   };
 }

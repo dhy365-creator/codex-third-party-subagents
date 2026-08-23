@@ -1,9 +1,9 @@
 # External Codex transport architecture
 
-Status: formal architecture plus a local Phase 1 production-adapter checkpoint.
-The adapter modules exist, but their registry entry is disabled and has no
-factory. They are not connected to active routing. Current Installer, Doctor,
-Verifier, Preflight, bridge, and Native behavior is unchanged.
+Status: formal architecture plus local Phase 1 adapter and Phase 2 control-plane
+checkpoints. Doctor, Verifier, Preflight, and Installer now understand both
+Transport states, but the External registry remains disabled with no factory.
+No active routing or public runtime route can reach External execution.
 
 ## Model
 
@@ -64,6 +64,25 @@ dependency-injected local test fixtures and is not a user-facing flag.
 Importing, constructing, describing, preparing, or validating the adapter does
 not start a child. Production `execute` remains blocked. Phase 1 made no
 third-party provider request and did not add a retry path.
+
+### Phase 2 control-plane checkpoint
+
+Phase 2 adds production control-plane descriptors and decisions without
+importing the adapter into an active path:
+
+- Doctor reports Native and External readiness separately using read-only,
+  non-billable checks;
+- Verifier exposes separate Native/External state and accepts only strict
+  Transport evidence, never result self-report;
+- Preflight evaluates the provider/model tuple, provider policy, explicit-only
+  policy, permission, busy state, evidence, and billable authorization;
+- Installer dry-run describes `auto|native|external` and rejects External
+  `--apply` with a Phase-3-required reason.
+
+The Phase 1 registry still reports `enabled: false` and `factory: null`. The
+Phase 2 feature and runtime-route gates are also `false`, and the active bridge
+can proceed only after a Native `ALLOW` decision. Phase 2 made zero third-party
+Provider requests and does not establish local External runtime verification.
 
 ## Adapter sequence
 
@@ -204,10 +223,10 @@ No other provider receives External eligibility from this record.
 
 ### Doctor
 
-Future Doctor output separates Native cross-provider transport, External Codex
-transport, credential presence, maintainer evidence, local installation
-verification, isolation prerequisites, launcher availability, and structured
-result support. It remains read-only and non-billable.
+Doctor output separates Native cross-provider Transport from External module,
+feature gate, exact `codex exec` prerequisite, isolated runtime root, permission,
+provider tuple, credential readiness, maintainer evidence, local runtime
+evidence, and eligibility. It remains read-only and non-billable.
 
 For current `0.149.x`, architecture-level status can be:
 
@@ -219,24 +238,27 @@ External local installation = UNVERIFIED until checked locally
 
 ### Installer
 
-Future dry-run accepts `auto`, `native`, or `external`. Apply remains explicit.
-Native uses Host compatibility. External also requires `codex exec`, safe
-Keychain auth, provider pack, isolated path, permission, result, and local
-integrity prerequisites. This task does not change the Installer CLI or apply.
+Dry-run accepts `auto`, `native`, or `external`. Native apply remains governed
+by the existing Host compatibility contract. An explicit External dry-run
+returns the disabled Phase 2 plan; External `--apply` fails closed before
+catalog acquisition, Keychain inspection, or filesystem writes.
 
 ### Verifier
 
-Future Verifier adds `transport`, `evidenceSource`, `hostVersion`, `codexBinary`,
-`provider`, `model`, `credentialReady`, and `verifiedAt` while retaining configured/providerResolved/
-taskDelivered/runtimeExecuted/runtimeVerified semantics. External verification
-does not use Native discovery as runtime proof.
+Verifier reports `transport`, `evidenceSource`, `hostVersion`, `codexBinary`,
+`providerId`, `model`, `credentialReady`, and `verifiedAt` while retaining
+configured/providerResolved/taskDelivered/runtimeExecuted/runtimeVerified
+semantics. Native and External states are separate. External verification does
+not use Native discovery, maintainer evidence, or result provider/model fields
+as local runtime proof.
 
 ### Preflight
 
-Future Preflight evaluates task suitability, provider policy, transport
-eligibility, explicit-only, busy state, and permission compatibility, returning
-`ALLOW`, `BLOCK`, `REQUIRE_EXPLICIT`, or `BUSY`. This architecture does not
-connect that selection to runtime routing.
+Preflight evaluates task suitability, provider policy, immutable provider/model
+tuple, Transport eligibility, explicit-only, busy state, permission,
+prerequisites/evidence, and billable authorization, returning `ALLOW`, `BLOCK`,
+`REQUIRE_EXPLICIT`, or `BUSY`. Only a Native `ALLOW` may continue to the
+existing bridge; every External production decision remains fail-closed.
 
 ## Cost boundary
 

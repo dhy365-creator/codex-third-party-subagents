@@ -36,6 +36,7 @@ test('repository contains no personal absolute paths, fixed UID, or credential v
 test('CLI rejects any API-key flag', () => {
   assert.throws(() => parseArgs(['--api-key', 'secret']), /unknown option/);
   assert.equal(parseArgs(['--migrate-legacy'])['migrate-legacy'], true);
+  assert.equal(parseArgs(['--transport', 'external']).transport, 'external');
 });
 
 test('post-install success signal appears only after complete local verification', () => {

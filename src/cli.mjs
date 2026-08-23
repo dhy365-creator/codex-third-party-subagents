@@ -9,6 +9,7 @@ const VALUE_FLAGS = new Set([
   'plan',
   'provider',
   'model',
+  'transport',
   'spark-available',
   'luna-available',
   'threshold',
@@ -82,6 +83,7 @@ async function askInstallOptions(parsed, streams = { input, output }) {
       apply: parsed.apply === true,
       provider,
       model,
+      transport: parsed.transport ?? 'auto',
       plan,
       sparkAvailable,
       lunaAvailable,
@@ -102,6 +104,7 @@ function installHelp() {
     `Dry-run is the default. Add --apply to write files.\n\n` +
     `  --provider <provider-pack-id>\n` +
     `  --model <profile-or-model-id>\n` +
+    `  --transport <auto|native|external>\n` +
     `  --plan <plus|pro>\n` +
     `  --spark-available <true|false>\n` +
     `  --luna-available <true|false>\n` +
@@ -131,6 +134,7 @@ function summarizeInstall(result) {
     migration: result.migration,
     profile: result.profile,
     profiles: result.profiles,
+    transportPlan: result.transportPlan,
     message: result.message,
   };
 }
@@ -147,6 +151,14 @@ export function summarizeVerify(result) {
     ready: result.ready,
     credentialReady: result.credentialReady,
     hostCompatibility: result.hostCompatibility,
+    transport: result.transport,
+    providerId: result.providerId,
+    model: result.model,
+    evidenceSource: result.evidenceSource,
+    hostVersion: result.hostVersion,
+    codexBinary: result.codexBinary,
+    verifiedAt: result.verifiedAt,
+    transports: result.transports,
     profile: result.profile,
     agentEvidence: result.agentEvidence,
     runtimeEvidence: result.runtimeEvidence,

@@ -34,9 +34,11 @@ Native adapter, then a runtime-verified External adapter, otherwise blocks. It
 never silently changes provider/model, falls back to OpenAI, pins an older Host,
 or uses an explicit-only role.
 
-The current architecture checkpoint adds only pure validation/selection
-contracts and documentation. It does **not** connect External execution to
-Installer, Doctor, Verifier, Preflight, routing, or the active bridge. See:
+Phase 2 now consumes the pure validation/selection contracts in Doctor,
+Verifier, Preflight, and Installer. This is control-plane awareness only:
+the External registry remains `enabled: false` with `factory: null`, active
+routing and the bridge cannot instantiate it, and Installer `--apply` rejects
+External activation with a Phase-3-required decision. See:
 
 - [Provider-neutral transport contract](transport-contract.md)
 - [External Codex transport architecture](external-transport.md)
@@ -53,10 +55,14 @@ unknown.
 
 `npm run doctor -- --provider <provider>` inspects the local prerequisites
 before installation. It checks the platform, Node.js, recognizable Codex state,
-native multi-agent mode and cross-provider Host compatibility, expected name/model/provider,
+Native multi-agent mode and cross-provider Host compatibility, expected name/model/provider,
 duplicate or project-scope identities, legacy migration state, owner-only
 permissions, Keychain item presence, OpenAI fallback hints, installed-manifest
-state, and prerequisites for the existing verifier.
+state, and prerequisites for the existing verifier. Phase 2 also reports the
+External module, disabled feature gate, exact `codex exec` prerequisite,
+isolated runtime-root state, permission profile, provider tuple, credential
+readiness, maintainer evidence, local-installation evidence, and eligibility
+without creating a runtime root or launching a child.
 
 Doctor performs no writes, never asks Keychain to return a credential value,
 does not print private paths, and makes no network or paid provider API call.
@@ -167,8 +173,10 @@ flowchart LR
     A --> S
 ```
 
-The External adapter shown in the formal decision documents is not part of this
-active data flow yet.
+The External adapter shown in the formal decision documents is still not part
+of this active data flow. Phase 2 preflight returns an uppercase Transport
+policy decision alongside the existing Native routing result, but only a
+Native `ALLOW` may proceed to the existing bridge.
 
 ## Verification states
 
@@ -183,8 +191,16 @@ active data flow yet.
 - `ready`: `configurationReady` plus a verified Keychain credential.
 - `agentEvidence`: per agent/provider/model local configuration checks with
   a timestamp; it intentionally has no Host runtime metadata.
-- `runtimeVerified`: not claimed by verifier. Real Codex tasks are recorded
-  separately after restarting or beginning a new Host session for the exact
-  agent/model tuple; the verifier does not ingest or independently accept those
-  external records.
+- `runtimeVerified`: the top-level Native state is not promoted by static
+  verification. Phase 2 may represent strict local External Transport evidence
+  only inside `transports.external`; result self-report and maintainer evidence
+  cannot set it, and the disabled gate keeps External `configurationReady` and
+  `ready` false.
 - `userAccepted`: separate from both local checks and runtime execution.
+
+Verifier output now includes `transport`, `providerId`, `model`,
+`evidenceSource`, `hostVersion`, `codexBinary`, `verifiedAt`, and independent
+`transports.native` / `transports.external` state. A result envelope is not
+accepted as External evidence. Strict maintainer evidence remains separate from
+strict local-installation evidence, and the disabled feature gate keeps
+External `configurationReady=false` / `ready=false` in Phase 2.

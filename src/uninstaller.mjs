@@ -24,6 +24,9 @@ const RUNTIME_FILES = [
   'preflight-runtime.mjs',
   'provider-packs.mjs',
   'routing.mjs',
+  'transport-contract.mjs',
+  'transport-control-plane.mjs',
+  'transport-selection.mjs',
 ];
 
 function allowedPaths(env, profiles) {

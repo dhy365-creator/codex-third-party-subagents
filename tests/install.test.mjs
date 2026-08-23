@@ -116,6 +116,14 @@ test('dry-run writes nothing, apply is idempotent, verify is honest, and uninsta
   }]);
   assert.equal(checked.runtimeEvidence.model, 'deepseek-v4-flash');
   assert.equal(checked.runtimeEvidence.hostRuntimeMetadata, null);
+  assert.equal(checked.transport, 'native');
+  assert.equal(checked.providerId, 'deepseek');
+  assert.equal(checked.model, 'deepseek-v4-flash');
+  assert.equal(checked.transports.native.ready, true);
+  assert.equal(checked.transports.external.modulePresent, true);
+  assert.equal(checked.transports.external.featureEnabled, false);
+  assert.equal(checked.transports.external.localEvidenceAvailable, false);
+  assert.equal(checked.transports.external.runtimeVerified, false);
   assert.match(checked.warnings.join('\n'), /runtime remains unverified/);
 
   await fs.appendFile(path.join(fixture.codexDir, 'AGENTS.md'), '# Later user rule\n');
@@ -177,6 +185,25 @@ test('verifier keeps local configuration separate from a blocked 0.149 provider 
   assert.equal(checked.configurationReady, false);
   assert.equal(checked.ready, false);
   assert.match(checked.issues.join('\n'), /Host cross-provider subagent host_blocked/);
+});
+
+test('verifier rejects result self-report as External runtime evidence', async (t) => {
+  const fixture = await setup(t);
+  await install({ ...fixture.options, apply: true });
+  const checked = await verify({
+    ...fixture.options,
+    checkKeychain: true,
+    keychainReadyImpl: async () => true,
+    externalTransportEvidence: {
+      providerId: 'deepseek',
+      model: 'deepseek-v4-flash',
+      runtimeVerified: true,
+    },
+  });
+  assert.equal(checked.configured, false);
+  assert.equal(checked.transports.external.providerResolved, false);
+  assert.equal(checked.transports.external.runtimeVerified, false);
+  assert.match(checked.issues.join('\n'), /failed strict validation/);
 });
 
 test('explicit Pro install creates only the dedicated Pro worker and verifies it separately', async (t) => {

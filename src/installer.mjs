@@ -43,6 +43,10 @@ import {
   replaceAgentsBlock,
   workerConfig,
 } from './templates.mjs';
+import {
+  installerTransportPlan,
+  normalizeTransportPreference,
+} from './transport-control-plane.mjs';
 
 const INSTALL_VERSION = '0.4.0-beta.2';
 const SOURCE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -58,6 +62,9 @@ const RUNTIME_FILES = [
   'preflight-runtime.mjs',
   'provider-packs.mjs',
   'routing.mjs',
+  'transport-contract.mjs',
+  'transport-control-plane.mjs',
+  'transport-selection.mjs',
 ];
 
 function stamp() {
@@ -93,6 +100,7 @@ function normalizeOptions(options) {
     sparkAvailable,
     lunaAvailable,
     migrateLegacy: options.migrateLegacy === true,
+    transport: normalizeTransportPreference(options.transport),
   };
 }
 
@@ -320,6 +328,16 @@ export async function install(options = {}) {
     codexPath: normalized.codexPath,
     commandRunner: normalized.commandRunner,
   });
+  const transportPlan = installerTransportPlan({
+    requestedTransport: normalized.transport,
+    compatibility: customAgentHost.compatibility,
+    providerId: providerPack.id,
+    providerRole: providerPack.role,
+    model: providerPack.model,
+  });
+  if (!dryRun && transportPlan.requestedTransport === 'external-codex') {
+    throw new Error(transportPlan.reason);
+  }
   const customAgentDefinitionsState = await (
     normalized.inspectCustomAgentDefinitionsImpl ?? inspectCustomAgentDefinitions
   )({
@@ -577,6 +595,7 @@ export async function install(options = {}) {
       providerRole: profile.role,
       model: profile.model,
     })),
+    transportPlan,
     message: dryRun ? 'dry-run: no files or keychain entries were changed' : 'installation applied',
   };
 }

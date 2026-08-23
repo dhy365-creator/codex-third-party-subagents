@@ -1,8 +1,9 @@
 # External transport phased implementation plan
 
-Status: approved architecture plan. Phase 1 is implemented at a local disabled
-checkpoint; it is not activated or integrated. Every later phase requires a
-separate branch, checkpoint, tests, and acceptance decision.
+Status: approved architecture plan. Phase 1 adapter and Phase 2 control-plane
+integration are implemented at local disabled checkpoints. External execution
+is not activated. Every later phase requires a separate branch, checkpoint,
+tests, and acceptance decision.
 
 ## Global gates
 
@@ -80,9 +81,19 @@ untouched.
 - Pro explicit-only tests cover both transports;
 - dry-run and uninstall safety remain unchanged.
 
+### Local outcome
+
+Completed on 2026-08-24. Doctor and Verifier now report Native and External
+state separately; Preflight returns Transport policy decisions without child
+execution; Installer dry-run describes `auto|native|external` and External
+apply fails closed before side effects. Maintainer evidence remains distinct
+from local runtime evidence. The adapter registry factory, feature gate, and
+runtime-route gate remain disabled. The final repository test count and QA
+evidence are recorded in [current state](current-state.md).
+
 ### Checkpoint
 
-`external-transport-phase-2-integration-contracts` — control-plane reporting and
+`external-transport-phase-2-control-plane` — control-plane reporting and
 selection only, execution disabled.
 
 ### Rollback

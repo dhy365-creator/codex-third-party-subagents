@@ -1,7 +1,7 @@
 # External transport security model
 
-Status: scoped threat model and architecture requirements for the proposed
-External Codex transport. It does not activate a production runtime path.
+Status: scoped threat model plus Phase 2 control-plane enforcement. External
+execution remains disabled and unreachable from the production runtime path.
 
 ## Overview
 
@@ -120,6 +120,26 @@ reporting, credentials, the single-slot bridge, redaction, and supported scope.
   defeat local process/file assumptions and are outside this architecture.
 - Provider-side retention or billing errors are governed externally, but the
   project must present the boundary and avoid hidden requests.
+
+## Phase 2 security checkpoint
+
+The Phase 2 control plane preserves the activation boundary:
+
+- the active Doctor, Verifier, Preflight, and Installer paths do not import or
+  instantiate the External adapter;
+- registry factory, feature gate, and runtime-route gate all remain disabled;
+- result provider/model self-report cannot satisfy strict runtime evidence;
+- Flash maintainer evidence is scoped and cannot become local installation
+  verification; Pro, MiniMax, and Qwen External evidence remains unknown;
+- provider/model tuples are echoed unchanged by Transport selection, Pro stays
+  explicit-only, and an ineligible explicit Transport never falls through;
+- Doctor and ordinary Verifier/Preflight/Installer paths make no Provider
+  request and never expose Keychain values;
+- reachability tests fail if an active control-plane module imports the adapter
+  or if a production External factory becomes available.
+
+These controls report readiness only. They do not authorize a billable request
+or create a public External execution route.
 
 ## Severity Calibration (Critical, High, Medium, Low)
 

@@ -1,7 +1,8 @@
 # Provider-neutral transport contract
 
-Status: architecture contract. The pure modules described here are not connected
-to Installer, Doctor, Verifier, Preflight, routing, or an active runtime path.
+Status: Phase 2 control-plane contract. Doctor, Verifier, Preflight, and
+Installer consume these pure descriptors and decisions, while External
+execution remains disabled and unreachable from routing or the active bridge.
 
 ## Separation invariant
 
@@ -195,15 +196,23 @@ available External transport does not authorize automatic third-party model use.
   before execution and require the appropriate explicit policy.
 - Pro roles are never automatically selected.
 
-## Pure contract modules
+## Contract and Phase 2 control-plane modules
 
 - `src/transport-contract.mjs`: adapter, request, result, permission, lifecycle,
   and evidence-reference validation.
 - `src/transport-evidence.mjs`: evidence-state and anti-spoof invariants.
 - `src/transport-selection.mjs`: provider-policy-aware, fail-closed selection.
+- `src/transport-control-plane.mjs`: Phase 2 feature gate, scoped maintainer
+  evidence metadata, Transport-aware preflight decisions, and Installer plan.
+- `src/transport-readiness.mjs`: read-only/non-billable External prerequisite
+  inspection for Doctor.
+- `src/transport-verification.mjs`: strict Native/External evidence separation
+  for Verifier; result self-report is rejected.
 
-These modules have no filesystem, Keychain, process, network, Installer,
-Verifier, Doctor, Preflight, bridge, or routing side effects.
+The three original contract modules and `transport-control-plane.mjs` remain
+pure. Readiness performs bounded filesystem metadata reads only. None of these
+modules starts a process, makes a Provider request, reads a credential value,
+creates a bridge task, or imports the External execution adapter.
 
 See also [External Codex transport](external-transport.md),
 [transport security](transport-security.md), the

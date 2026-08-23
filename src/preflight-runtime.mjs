@@ -19,6 +19,14 @@ import { inspectCustomAgentHost, validateCustomAgentToml } from './custom-agents
 import { evaluateHostCompatibility, publicHostCompatibility } from './host-compatibility.mjs';
 import { inspectProjectCustomAgentLayers } from './project-agent-safety.mjs';
 import { chooseRoute, ROLES, validatePreflightInput } from './routing.mjs';
+import { PERMISSION_PROFILES, TRANSPORTS } from './transport-contract.mjs';
+import {
+  evaluateTransportPreflight,
+  nativeTransportEligibility,
+  normalizeTransportPreference,
+  productionExternalTransportEligibility,
+  roleRequiresExplicitProvider,
+} from './transport-control-plane.mjs';
 
 const FALLBACK_AGENT = PACKAGE_NAME;
 
@@ -201,7 +209,15 @@ async function routingState(config, profiles, deps = {}) {
   return { ...quota, providerReadyByRole, bridgeBusy: busy };
 }
 
-function outputFor(input, route, state, profile, bridgePrepared = false, compatibility = null) {
+function outputFor(
+  input,
+  route,
+  state,
+  profile,
+  bridgePrepared = false,
+  compatibility = null,
+  transportDecision = null,
+) {
   const hostCompatibility = compatibility ? publicHostCompatibility(compatibility) : null;
   if (route.decision === 'deny') {
     return {
@@ -209,6 +225,7 @@ function outputFor(input, route, state, profile, bridgePrepared = false, compati
       decision: 'deny',
       action: 'deny',
       hostCompatibility,
+      transportDecision,
       reason: route.reason,
     };
   }
@@ -222,6 +239,7 @@ function outputFor(input, route, state, profile, bridgePrepared = false, compati
     forkTurns: route.action === 'spawn' && route.chosenAgent !== ROLES.SPARK ? 'none' : null,
     bridgePrepared,
     hostCompatibility,
+    transportDecision,
     quota: {
       sparkRemaining: state.sparkRemaining,
       generalRemaining: state.generalRemaining,
@@ -257,7 +275,34 @@ export async function runPreflight(input, config, deps = {}) {
     version: host.version,
     multiAgent: host.multiAgent,
   });
-  if (compatibility.automaticRoutingAllowed !== true) {
+  const requestedTransport = normalizeTransportPreference(input.transportPreference);
+  const permissionProfile = input.permissionProfile ?? PERMISSION_PROFILES.READ_ONLY;
+  if (!Object.values(PERMISSION_PROFILES).includes(permissionProfile)) {
+    throw new Error('permissionProfile is unsupported');
+  }
+  if (input.billableAuthorized !== undefined && typeof input.billableAuthorized !== 'boolean') {
+    throw new Error('billableAuthorized must be boolean');
+  }
+  const requestedProfile = profiles.find((profile) => profile.providerRole === input.requestedAgent) ?? null;
+  const defaultProfile = profiles.find((profile) => profile.providerRole === defaultRole) ?? null;
+  const transportProfile = requestedProfile ?? defaultProfile;
+  const transportInput = transportProfile ? {
+    requestedTransport,
+    providerPolicy: 'allow',
+    providerExplicitlyRequested: requestedProfile !== null,
+    roleExplicitOnly: roleRequiresExplicitProvider(transportProfile.providerRole),
+    providerId: transportProfile.providerPack.id,
+    providerRole: transportProfile.providerRole,
+    model: transportProfile.providerPack.model,
+    permissionProfile,
+    providerSuitable: input.providerSuitable ?? input.deepseekSuitable,
+    billableAuthorized: input.billableAuthorized === true,
+    native: nativeTransportEligibility(compatibility),
+    external: productionExternalTransportEligibility({ busy: false }),
+  } : null;
+  const transportDecision = transportInput ? evaluateTransportPreflight(transportInput) : null;
+  const transportBlocked = transportDecision && transportDecision.decision !== 'ALLOW';
+  if (compatibility.automaticRoutingAllowed !== true || transportBlocked) {
     const blockedState = {
       sparkRemaining: null,
       generalRemaining: null,
@@ -265,13 +310,19 @@ export async function runPreflight(input, config, deps = {}) {
       bridgeBusy: true,
     };
     const hostReason = `host cross-provider subagent ${compatibility.status.toLowerCase()}: ${compatibility.reason}`;
+    const transportReason = requestedTransport === TRANSPORTS.EXTERNAL_CODEX || transportBlocked
+      ? transportDecision?.reason ?? hostReason
+      : hostReason;
     if (profiles.some((profile) => profile.providerRole === input.requestedAgent)) {
       return outputFor(input, {
         decision: 'deny',
         action: 'deny',
         chosenAgent: null,
-        reason: hostReason,
-      }, blockedState, null, false, compatibility);
+        reason: compatibility.automaticRoutingAllowed !== true
+          && requestedTransport !== TRANSPORTS.EXTERNAL_CODEX
+          ? hostReason
+          : transportReason,
+      }, blockedState, null, false, compatibility, transportDecision);
     }
     const blockedInput = {
       operation: input.operation,
@@ -292,15 +343,39 @@ export async function runPreflight(input, config, deps = {}) {
     const blockedRoute = chooseRoute(blockedInput);
     const route = {
       ...blockedRoute,
-      reason: hostReason,
+      reason: compatibility.automaticRoutingAllowed !== true && requestedTransport !== TRANSPORTS.EXTERNAL_CODEX
+        ? hostReason
+        : transportReason,
     };
     const selectedProfile = profiles.find((profile) => profile.providerRole === route.chosenAgent) ?? null;
-    return outputFor(input, route, blockedState, selectedProfile, false, compatibility);
+    return outputFor(input, route, blockedState, selectedProfile, false, compatibility, transportDecision);
+  }
+  if (transportDecision && transportDecision.selectedTransport !== TRANSPORTS.NATIVE) {
+    return outputFor(input, {
+      decision: 'deny',
+      action: 'deny',
+      chosenAgent: null,
+      reason: 'Phase 2 cannot execute a non-Native Transport',
+    }, {
+      sparkRemaining: null,
+      generalRemaining: null,
+      providerReadyByRole: {},
+      bridgeBusy: true,
+    }, null, false, compatibility, transportDecision);
   }
   const state = await routingState(config, profiles, deps);
-  const requestedProfile = profiles.find((profile) => profile.providerRole === input.requestedAgent) ?? null;
-  const defaultProfile = profiles.find((profile) => profile.providerRole === defaultRole) ?? null;
   const providerReady = state.providerReadyByRole[(requestedProfile ?? defaultProfile)?.providerRole] ?? false;
+  const finalTransportDecision = transportInput
+    ? evaluateTransportPreflight({ ...transportInput, providerReady })
+    : null;
+  if (requestedProfile && finalTransportDecision?.decision !== 'ALLOW') {
+    return outputFor(input, {
+      decision: 'deny',
+      action: 'deny',
+      chosenAgent: null,
+      reason: finalTransportDecision?.reason ?? 'provider Transport readiness is incomplete',
+    }, state, null, false, compatibility, finalTransportDecision);
+  }
   const routeInput = {
     operation: input.operation,
     requestedAgent: input.requestedAgent,
@@ -319,7 +394,9 @@ export async function runPreflight(input, config, deps = {}) {
   };
   let route = chooseRoute(routeInput);
   let selectedProfile = profiles.find((profile) => profile.providerRole === route.chosenAgent) ?? null;
-  if (!selectedProfile) return outputFor(input, route, state, null, false, compatibility);
+  if (!selectedProfile) {
+    return outputFor(input, route, state, null, false, compatibility, finalTransportDecision);
+  }
 
   let projectAgentsSafe = false;
   try {
@@ -335,7 +412,7 @@ export async function runPreflight(input, config, deps = {}) {
       reason: 'project custom-agent layer present or unreadable; safe OpenAI fallback',
     };
     selectedProfile = profiles.find((profile) => profile.providerRole === route.chosenAgent) ?? null;
-    return outputFor(input, route, state, selectedProfile, false, compatibility);
+    return outputFor(input, route, state, selectedProfile, false, compatibility, finalTransportDecision);
   }
 
   let taskName = input.taskName;
@@ -361,7 +438,7 @@ export async function runPreflight(input, config, deps = {}) {
       providerRole: selectedProfile.providerRole,
       model: selectedProfile.providerPack.model,
     });
-    return outputFor(input, route, state, selectedProfile, true, compatibility);
+    return outputFor(input, route, state, selectedProfile, true, compatibility, finalTransportDecision);
   } catch (error) {
     const busy = error instanceof BridgeBusyError || error?.code === 'BRIDGE_BUSY';
     route = chooseRoute({
@@ -376,7 +453,7 @@ export async function runPreflight(input, config, deps = {}) {
         : 'provider bridge preparation failed; safe OpenAI fallback',
     };
     selectedProfile = profiles.find((profile) => profile.providerRole === route.chosenAgent) ?? null;
-    return outputFor(input, route, state, selectedProfile, false, compatibility);
+    return outputFor(input, route, state, selectedProfile, false, compatibility, finalTransportDecision);
   }
 }
 

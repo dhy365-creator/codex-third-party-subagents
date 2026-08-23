@@ -14,8 +14,9 @@ import {
   DEFAULT_PROVIDER_ID as PACK_DEFAULT,
   resolveProviderPack,
 } from './provider-packs.mjs';
+import { buildTransportVerification } from './transport-verification.mjs';
 
-const RUNTIME_FILES = [
+const NATIVE_RUNTIME_FILES = [
   'bridge.mjs',
   'bridge-cli.mjs',
   'catalog.mjs',
@@ -28,10 +29,23 @@ const RUNTIME_FILES = [
   'provider-packs.mjs',
   'routing.mjs',
 ];
+const PHASE_2_RUNTIME_FILES = [
+  'transport-contract.mjs',
+  'transport-control-plane.mjs',
+  'transport-selection.mjs',
+];
 
-function allowedPaths(env, profiles) {
+function phase2RuntimeRequired(env, manifest) {
+  const phase2Paths = new Set(PHASE_2_RUNTIME_FILES.map((name) => path.join(env.runtimeDir, name)));
+  return (manifest.managedFiles ?? []).some((record) => phase2Paths.has(record.path));
+}
+
+function allowedPaths(env, profiles, manifest) {
+  const runtimeFiles = phase2RuntimeRequired(env, manifest)
+    ? [...NATIVE_RUNTIME_FILES, ...PHASE_2_RUNTIME_FILES]
+    : NATIVE_RUNTIME_FILES;
   return new Set([
-    ...RUNTIME_FILES.map((name) => path.join(env.runtimeDir, name)),
+    ...runtimeFiles.map((name) => path.join(env.runtimeDir, name)),
     ...profiles.flatMap((profile) => [profile.agentPath, profile.catalogPath]),
     env.configPath,
     env.preflightPath,
@@ -130,9 +144,36 @@ function hostState(host) {
   };
 }
 
-function incompleteResult({ env, warnings, issue, host }) {
+function withTransportVerification(result, { env, host, options, providerPack }) {
+  const pack = providerPack ?? env.providerPack;
+  const input = {
+    result,
+    providerPack: pack,
+    host,
+    codexBinary: options.codexPath ?? null,
+    externalConfigured: options.externalConfigured === true,
+    externalEvidence: options.externalTransportEvidence ?? null,
+    externalPrerequisitesReady: options.externalPrerequisitesReady === true,
+    externalBusy: options.externalBusy === true,
+  };
+  try {
+    return { ...result, ...buildTransportVerification(input) };
+  } catch {
+    const transport = buildTransportVerification({ ...input, externalEvidence: null });
+    return {
+      ...result,
+      configured: false,
+      configurationReady: false,
+      ready: false,
+      issues: [...result.issues, 'External Transport evidence failed strict validation'],
+      ...transport,
+    };
+  }
+}
+
+function incompleteResult({ env, warnings, issue, host, options }) {
   const state = hostState(host);
-  return {
+  const result = {
     configured: false,
     discoverable: false,
     providerResolved: state.providerResolved,
@@ -147,6 +188,7 @@ function incompleteResult({ env, warnings, issue, host }) {
     warnings,
     environment: env,
   };
+  return withTransportVerification(result, { env, host, options, providerPack: env.providerPack });
 }
 
 export async function verify(options = {}) {
@@ -160,11 +202,11 @@ export async function verify(options = {}) {
   try {
     manifest = await readManifest(env);
   } catch (error) {
-    return incompleteResult({ env, warnings, issue: error.message, host });
+    return incompleteResult({ env, warnings, issue: error.message, host, options });
   }
 
   if (!manifest) {
-    return incompleteResult({ env, warnings, issue: 'install manifest is missing', host });
+    return incompleteResult({ env, warnings, issue: 'install manifest is missing', host, options });
   }
 
   if (!manifest.options?.hostCompatibility?.level) {
@@ -198,7 +240,7 @@ export async function verify(options = {}) {
     issues.push('selected provider model profile is not installed');
   }
 
-  const allowed = allowedPaths(env, profiles);
+  const allowed = allowedPaths(env, profiles, manifest);
   const recorded = new Set();
   for (const record of manifest.managedFiles ?? []) {
     if (!allowed.has(record.path)) {
@@ -332,7 +374,7 @@ export async function verify(options = {}) {
     && host.multiAgent === true;
   const configurationReady = configured
     && currentHost.compatibility.configurationInstallAllowed === true;
-  return {
+  const result = {
     configured,
     discoverable,
     providerResolved: currentHost.providerResolved,
@@ -374,4 +416,10 @@ export async function verify(options = {}) {
       runtimeVerified: false,
     } : null,
   };
+  return withTransportVerification(result, {
+    env,
+    host,
+    options,
+    providerPack: providerPack ?? env.providerPack,
+  });
 }

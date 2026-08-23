@@ -2,6 +2,12 @@
 
 ## 已完成（local / verified）
 
+- [x] 2026-08-24 基于 `4f0a10a` 完成 External Transport Phase 2 control plane：Doctor、
+  Verifier、Preflight、Installer 已具备 Transport-aware read-only/decision/dry-run 能力；
+  External registry factory、feature gate 与 runtime-route gate 继续禁用。
+- [x] Phase 2 严格保持 maintainer evidence != local installation evidence、result 自报不是
+  Provider 证明、Pro explicit-only、provider/model tuple 不替换；完整 `npm test` 为
+  `189/189` PASS，第三方 live request 为 `0`，package 仍为 `0.4.0-beta.2`。
 - [x] 2026-08-24 基于 `502cd981` 完成 External Transport Phase 1 production adapter：
   isolated config/home、safe launcher/supervisor、strict result/evidence、central redaction、
   atomic archive 与 single-slot 均由 37 项 local fake-child 测试覆盖；完整 `npm test`
@@ -84,8 +90,9 @@
 - [x] Phase 1：productionize provider-neutral External adapter、isolated config、lifecycle、
   result/evidence 与 fake-process 安全测试；active routing 保持 disabled，production registry
   无 factory，`runtimeVerified` 未由 fixture 提升。
-- [ ] Phase 2：接入 Doctor/Verifier/Preflight/Installer contract 与 feature gate；普通检查保持
-  read-only/non-billable，maintainer evidence 与 local installation 分开。
+- [x] Phase 2：接入 Doctor/Verifier/Preflight/Installer contract 与 disabled feature gate；
+  普通检查保持 read-only/non-billable，maintainer evidence 与 local installation 分开，
+  active runtime 只能继续 Native `ALLOW`。
 - [ ] Phase 3：在明确 `BILLABLE PROVIDER REQUEST` 与用户授权下完成 DeepSeek Flash
   clean-install production E2E。
 - [ ] Phase 4：独立完成 DeepSeek V4 Pro External explicit-only E2E，不自动路由。
@@ -138,7 +145,9 @@
 
 ## `v0.5.0-beta.1` release gate
 
-- [ ] **NOT READY**：先由维护者选择下一阶段 Host 架构方向；当前任务不创建 Release/tag。
+- [ ] **NOT READY**：External 架构的 Phase 1/2 已完成，但 Phase 3 live runtime 与 release
+  gate 尚未授权或验证；当前任务不创建 Release/tag。
 - [ ] 方向 A：等待 Codex 官方提供 cross-provider child support。
 - [ ] 方向 B：只维护精确版本范围内的 legacy compatibility，不静默 pin 或引导降级。
-- [ ] 方向 C：另行设计有界、provider-neutral handoff；本轮不实现新 transport/sidecar。
+- [x] 方向 C：已设计有界、provider-neutral External Transport，并完成 disabled Phase 1/2；
+  尚未进入 feature-gated production E2E。
