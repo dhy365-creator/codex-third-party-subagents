@@ -109,7 +109,7 @@ test('production execution gate blocks child spawn even after non-billable prepa
   const adapter = createExternalCodexTransport({
     stateRoot: fixture.stateRoot,
     codexPath: fixture.codexPath,
-    catalogSource: path.resolve('tests/fixtures/catalog.json'),
+    catalogSource: path.resolve('tests/fixtures/production-catalog.json'),
     credentialCommand: {
       kind: 'keychain',
       command: '/usr/bin/security',

@@ -15,6 +15,7 @@ import {
   extractCatalogDocument,
   reduceCatalogForProvider,
 } from './catalog.mjs';
+import { PRODUCTION_CATALOG_CONTRACT, validateProductionCatalog } from './production-catalog-contract.mjs';
 import { keychainReady } from './keychain.mjs';
 import {
   inspectCustomAgentDefinitions,
@@ -334,8 +335,10 @@ export async function install(options = {}) {
     providerId: providerPack.id,
     providerRole: providerPack.role,
     model: providerPack.model,
+    externalFlashBeta: normalized.externalFlashBeta,
   });
-  if (!dryRun && transportPlan.requestedTransport === 'external-codex') {
+  if (!dryRun && transportPlan.requestedTransport === 'external-codex'
+    && transportPlan.applyAllowed !== true) {
     throw new Error(transportPlan.reason);
   }
   const customAgentDefinitionsState = await (
@@ -354,7 +357,8 @@ export async function install(options = {}) {
   });
   const customAgentConflict = migration.conflicts.length > 0
     || customAgentDefinitionsState.issues.length > 0;
-  if (!dryRun && customAgentHost.compatibility?.configurationInstallAllowed !== true) {
+  if (!dryRun && customAgentHost.compatibility?.configurationInstallAllowed !== true
+    && transportPlan.externalFlashBetaConfiguration !== true) {
     throw new Error(`Host cross-provider subagent installation is blocked: ${customAgentHost.reason}`);
   }
   if (!dryRun && customAgentConflict) {
@@ -395,6 +399,15 @@ export async function install(options = {}) {
     profile.profile,
     reduceCatalogForProvider(acquired.catalog, profile.catalog),
   ]));
+  if (transportPlan.externalFlashBetaConfiguration === true) {
+    catalogs.set(providerPack.profile, validateProductionCatalog(acquired.catalog, {
+      codexVersion: PRODUCTION_CATALOG_CONTRACT.codexVersion,
+      providerId: providerPack.id,
+      model: providerPack.model,
+      requiredModalities: providerPack.catalog.requiredModalities,
+      outputModalities: providerPack.catalog.outputModalities,
+    }));
+  }
 
   if (!dryRun) {
     const check = normalized.keychainReadyImpl ?? keychainReady;

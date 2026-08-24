@@ -13,6 +13,36 @@
     "url": "https://github.com/dhy365-creator/codex-third-party-subagents/issues"
   },
   "type": "module",
+  "bin": {
+    "codex-third-party-subagents-install": "scripts/install.mjs",
+    "codex-third-party-subagents-doctor": "scripts/doctor.mjs",
+    "codex-third-party-subagents-verify": "scripts/verify.mjs",
+    "codex-third-party-subagents-uninstall": "scripts/uninstall.mjs",
+    "codex-third-party-subagents-flash-e2e": "scripts/external-flash-e2e.mjs"
+  },
+  "files": [
+    "src/",
+    "scripts/",
+    "docs/CODEX_INSTALL_PROMPT.zh-CN.md",
+    "docs/architecture.md",
+    "docs/configuration-zh.md",
+    "docs/external-transport.md",
+    "docs/flash-beta-clean-install.md",
+    "docs/faq.md",
+    "docs/faq.zh-CN.md",
+    "docs/host-compatibility.md",
+    "docs/migration/",
+    "docs/provider-compatibility.md",
+    "docs/provider-compatibility.zh-CN.md",
+    "docs/transport-contract.md",
+    "docs/transport-security.md",
+    "docs/troubleshooting.md",
+    "README.md",
+    "README.zh-CN.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=20"
   },

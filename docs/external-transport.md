@@ -240,9 +240,13 @@ External local installation = VERIFIED for the exact controlled Flash E2E only
 ### Installer
 
 Dry-run accepts `auto`, `native`, or `external`. Native apply remains governed
-by the existing Host compatibility contract. An explicit External dry-run
-returns the disabled Phase 2 plan; External `--apply` fails closed before
-catalog acquisition, Keychain inspection, or filesystem writes.
+by the existing Host compatibility contract. External apply remains blocked by
+default. The exact Flash Beta candidate may install configuration with both
+`--transport external` and `--external-flash-beta`; this exception does not
+enable the registry, factory, runtime route, or automatic fallback. Every live
+Flash E2E still requires the separate controlled runner, exact tuple, three
+explicit execution flags, billable authorization, owner-only roots, request
+ledger, and exact Codex CLI `0.149.0`.
 
 ### Verifier
 

@@ -15,7 +15,7 @@ import {
 } from './transport-readiness.mjs';
 
 const STATUS = Object.freeze({ PASS: 'PASS', WARN: 'WARN', BLOCKED: 'BLOCKED' });
-const VALUE_FLAGS = new Set(['provider', 'model']);
+const VALUE_FLAGS = new Set(['provider', 'model', 'home-dir']);
 const CODEX_APP_CANDIDATES = Object.freeze([
   '/Applications/Codex.app',
   '/Applications/ChatGPT.app',
@@ -113,6 +113,9 @@ export function parseDoctorArgs(argv = process.argv.slice(2)) {
     if (!value || value.startsWith('--')) throw new Error(`--${name} requires a value`);
     parsed[name] = value;
     index += 1;
+  }
+  if (parsed['home-dir'] && !path.isAbsolute(parsed['home-dir'])) {
+    throw new Error('--home-dir requires an absolute path');
   }
   return parsed;
 }
@@ -434,14 +437,14 @@ export function formatDoctorSummary(report) {
 }
 
 export function doctorHelp() {
-  return 'Usage: npm run doctor -- [--provider <deepseek|minimax|qwen>] [--model <model>]\n';
+  return 'Usage: npm run doctor -- [--provider <deepseek|minimax|qwen>] [--model <model>] [--home-dir <absolute-user-home>]\n';
 }
 
 export async function doctorCli(argv = process.argv.slice(2)) {
   try {
     const parsed = parseDoctorArgs(argv);
     if (parsed.help) return process.stdout.write(doctorHelp());
-    const report = await runDoctor(parsed);
+    const report = await runDoctor({ ...parsed, homeDir: parsed['home-dir'] });
     process.stdout.write(`${formatDoctorSummary(report)}\n`);
     if (report.summary.BLOCKED) process.exitCode = 1;
   } catch {

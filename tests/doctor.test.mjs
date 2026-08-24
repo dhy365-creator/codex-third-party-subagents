@@ -60,11 +60,15 @@ test('parseDoctorArgs supports supported doctor flags', () => {
     'deepseek',
     '--model',
     'deepseek-v4-flash',
+    '--home-dir',
+    '/tmp/fixture-home',
     '--help',
   ]);
   assert.equal(parsed.provider, 'deepseek');
   assert.equal(parsed.model, 'deepseek-v4-flash');
   assert.equal(parsed.help, true);
+  assert.equal(parsed['home-dir'], '/tmp/fixture-home');
+  assert.throws(() => parseDoctorArgs(['--home-dir', 'relative']), /absolute path/);
 });
 
 test('doctor is blocked outside macOS', async () => {

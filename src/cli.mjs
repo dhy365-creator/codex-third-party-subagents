@@ -1,4 +1,5 @@
 import { createInterface } from 'node:readline/promises';
+import path from 'node:path';
 import { stdin as input, stdout as output } from 'node:process';
 import { install } from './installer.mjs';
 import { uninstall } from './uninstaller.mjs';
@@ -15,12 +16,14 @@ const VALUE_FLAGS = new Set([
   'threshold',
   'catalog-source',
   'setup-script-url',
+  'home-dir',
 ]);
 const BOOLEAN_FLAGS = new Set([
   'apply',
   'confirm-main-preserved',
   'consent-data',
   'migrate-legacy',
+  'external-flash-beta',
   'skip-keychain-check',
   'help',
 ]);
@@ -40,6 +43,9 @@ export function parseArgs(argv) {
     if (!value || value.startsWith('--')) throw new Error(`--${name} requires a value`);
     result[name] = value;
     index += 1;
+  }
+  if (result['home-dir'] && !path.isAbsolute(result['home-dir'])) {
+    throw new Error('--home-dir requires an absolute path');
   }
   return result;
 }
@@ -91,8 +97,10 @@ async function askInstallOptions(parsed, streams = { input, output }) {
       confirmMainPreserved: confirmMainPreserved === true,
       consentData: consentData === true,
       migrateLegacy: parsed['migrate-legacy'] === true,
+      externalFlashBeta: parsed['external-flash-beta'] === true,
       catalogSource: parsed['catalog-source'] ?? 'auto',
       setupScriptUrl: parsed['setup-script-url'],
+      homeDir: parsed['home-dir'],
     };
   } finally {
     rl?.close();
@@ -112,13 +120,15 @@ function installHelp() {
     `  --confirm-main-preserved\n` +
    `  --consent-data\n` +
     `  --migrate-legacy (adopt a matching existing Custom Agent with a backup)\n` +
+   `  --external-flash-beta (install exact Flash configuration only; execution stays default-off)\n` +
    `  --catalog-source <auto|local-path>\n` +
     `  --setup-script-url <official-provider-url>\n` +
+    `  --home-dir <absolute-user-home>\n` +
     `  --apply\n`;
 }
 
 function uninstallHelp() {
-  return 'Usage: node scripts/uninstall.mjs [--provider <provider-pack-id>] [--apply]\nDry-run is the default. Uninstall removes every installed profile for that provider; Keychain credentials and bridge archives are never removed.\n';
+  return 'Usage: node scripts/uninstall.mjs [--provider <provider-pack-id>] [--home-dir <absolute-user-home>] [--apply]\nDry-run is the default. Uninstall removes every installed profile for that provider; Keychain credentials and bridge archives are never removed.\n';
 }
 
 function summarizeInstall(result) {
@@ -197,6 +207,7 @@ export function verifyCli(argv = process.argv.slice(2)) {
       checkKeychain: parsed['skip-keychain-check'] !== true,
       provider: parsed.provider,
       model: parsed.model,
+      homeDir: parsed['home-dir'],
     });
     process.stdout.write(`${JSON.stringify(summarizeVerify(result), null, 2)}\n`);
     if (!result.ready) process.exitCode = 1;
@@ -211,6 +222,7 @@ export function uninstallCli(argv = process.argv.slice(2)) {
       apply: parsed.apply === true,
       provider: parsed.provider,
       model: parsed.model,
+      homeDir: parsed['home-dir'],
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     if (result.conflicts.length) process.exitCode = 1;

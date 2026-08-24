@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { reduceCatalogForProvider } from '../catalog.mjs';
+import { PRODUCTION_CATALOG_CONTRACT, validateProductionCatalog } from '../production-catalog-contract.mjs';
 import { resolveProviderPack } from '../provider-packs.mjs';
 import { containsCredentialText } from './external-evidence.mjs';
 import { sha256, writePrivateFile } from './external-fs-safety.mjs';
@@ -22,6 +23,7 @@ export const EXTERNAL_DISABLED_FEATURES = Object.freeze([
 ]);
 
 const CREDENTIAL_FIELDS = Object.freeze(['kind', 'command', 'args']);
+const preparedCatalogs = new WeakSet();
 
 function exactFields(value, fields, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
@@ -104,28 +106,68 @@ export function minimalExternalConfig({ pack, catalogPath, credentialCommand, pe
   return config;
 }
 
+export async function prepareProductionExternalCatalog({ catalogSource, request } = {}) {
+  if (!path.isAbsolute(catalogSource ?? '')) throw new Error('catalogSource must be absolute');
+  const sourceInfo = await fs.lstat(catalogSource);
+  if (sourceInfo.isSymbolicLink() || !sourceInfo.isFile() || sourceInfo.size > 4 * 1024 * 1024) {
+    throw new Error('production catalog source is unsafe or oversized');
+  }
+  const pack = resolveExternalProviderTuple(request);
+  let source;
+  try {
+    source = JSON.parse(await fs.readFile(catalogSource, 'utf8'));
+  } catch {
+    throw new Error('production catalog source is invalid JSON');
+  }
+  const catalog = validateProductionCatalog(source, {
+    codexVersion: PRODUCTION_CATALOG_CONTRACT.codexVersion,
+    providerId: pack.id,
+    model: pack.model,
+    requiredModalities: pack.catalog.requiredModalities,
+    outputModalities: pack.catalog.outputModalities,
+  });
+  const prepared = Object.freeze({ pack, catalog });
+  preparedCatalogs.add(prepared);
+  return prepared;
+}
+
 export async function writeMinimalExternalHome({
   homeDir,
   catalogSource,
   request,
   credentialCommand,
   allowFixtureCredential = false,
+  preparedCatalog = null,
+  productionCatalogRequired = true,
 } = {}) {
   if (!path.isAbsolute(homeDir ?? '') || !path.isAbsolute(catalogSource ?? '')) {
     throw new Error('homeDir and catalogSource must be absolute');
   }
-  const sourceInfo = await fs.lstat(catalogSource);
-  if (sourceInfo.isSymbolicLink() || !sourceInfo.isFile() || sourceInfo.size > 4 * 1024 * 1024) {
-    throw new Error('catalog source is unsafe or oversized');
+  const production = preparedCatalog ?? (productionCatalogRequired
+    ? await prepareProductionExternalCatalog({ catalogSource, request })
+    : null);
+  if (production && !preparedCatalogs.has(production)) {
+    throw new Error('production catalog preparation is invalid');
   }
-  const pack = resolveExternalProviderTuple(request);
+  const requestedPack = resolveExternalProviderTuple(request);
+  if (production && (production.pack.id !== requestedPack.id || production.pack.model !== requestedPack.model)) {
+    throw new Error('production catalog preparation does not match request');
+  }
+  const pack = production?.pack ?? requestedPack;
   const checkedCredential = validateCredentialCommand(
     credentialCommand,
     pack,
     { allowFixture: allowFixtureCredential },
   );
-  const source = JSON.parse(await fs.readFile(catalogSource, 'utf8'));
-  const catalog = reduceCatalogForProvider(source, pack.catalog);
+  let catalog = production?.catalog;
+  if (!catalog) {
+    const sourceInfo = await fs.lstat(catalogSource);
+    if (sourceInfo.isSymbolicLink() || !sourceInfo.isFile() || sourceInfo.size > 4 * 1024 * 1024) {
+      throw new Error('catalog source is unsafe or oversized');
+    }
+    const source = JSON.parse(await fs.readFile(catalogSource, 'utf8'));
+    catalog = reduceCatalogForProvider(source, pack.catalog);
+  }
   const catalogPath = path.join(homeDir, pack.catalog.file);
   const configPath = path.join(homeDir, 'config.toml');
   await writePrivateFile(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`, { exclusive: true });

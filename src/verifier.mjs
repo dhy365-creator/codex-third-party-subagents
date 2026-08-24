@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { catalogIsSafe } from './catalog.mjs';
+import { PRODUCTION_CATALOG_CONTRACT, validateProductionCatalog } from './production-catalog-contract.mjs';
 import { readExternalFlashEvidence } from './external-evidence-store.mjs';
 import { discoverEnvironment } from './environment.mjs';
 import { fs, lstatIfExists, sha256File } from './fs-utils.mjs';
@@ -103,6 +104,12 @@ function configCustomAgentsAreValid(config, profiles) {
     && agent.model === profile.model
     && agent.modelProvider === profile.providerPack.modelProvider
   )));
+}
+
+function productionCatalogRequired(manifest, providerId, profile) {
+  return manifest.options?.hostCompatibility?.version === PRODUCTION_CATALOG_CONTRACT.codexVersion
+    && providerId === PRODUCTION_CATALOG_CONTRACT.providerId
+    && profile.model === PRODUCTION_CATALOG_CONTRACT.model;
 }
 
 async function readManifest(env) {
@@ -325,6 +332,14 @@ export async function verify(options = {}) {
       const catalog = JSON.parse(await fs.readFile(profile.catalogPath, 'utf8'));
       if (!catalogIsSafe(catalog, profile.providerPack.catalog)) {
         issues.push(`runtime catalog is not safe for ${profile.model}`);
+      } else if (productionCatalogRequired(manifest, providerId, profile)) {
+        validateProductionCatalog(catalog, {
+          codexVersion: PRODUCTION_CATALOG_CONTRACT.codexVersion,
+          providerId,
+          model: profile.model,
+          requiredModalities: profile.providerPack.catalog.requiredModalities,
+          outputModalities: profile.providerPack.catalog.outputModalities,
+        });
       }
     } catch {
       issues.push(`runtime catalog is missing or invalid for ${profile.model}`);

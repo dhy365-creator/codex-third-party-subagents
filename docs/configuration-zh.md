@@ -11,6 +11,11 @@ macOS-only、公开 beta；GitHub/package slug 为 `codex-third-party-subagents`
 版本为 Unknown。Blocked/Unknown Host 只能 inspect、Doctor、dry-run 和 migration
 analysis，不能 `--apply` 或创建 active provider bridge。
 
+唯一例外是精确 `DeepSeek / deepseek-v4-flash / external-codex` 的 Beta 配置安装：
+`--transport external --external-flash-beta` 可以在 `0.149.0` 写入受管配置，但不会开启
+普通 External registry、factory、runtime route 或自动 fallback。实际 E2E 仍需独立的
+显式付费授权和全部三个执行开关。见 [Flash Beta 干净安装指南](flash-beta-clean-install.md)。
+
 安装器会要求确认：
 
 1. 套餐是 Plus 还是 Pro。

@@ -1,5 +1,18 @@
 # 任务清单
 
+## 部分完成 / 阻塞
+
+- [x] 2026-08-24 Flash production catalog contract + offline hardening：精确 `0.149.0`
+  production contract、pre-permit/pre-ledger/pre-child ordering、真实 Codex guaranteed-offline
+  `thread.started`、artifact clean install、restart、uninstall/reinstall、迁移回归、完整测试与
+  Security scan 已本地通过；Provider request `0`，历史账本保持 `3/3` 和 `1/3`。这是 local
+  checkpoint，不代表 Beta RC ready；仍需未来单独授权的 installed-artifact live Flash E2E。
+- [x] 2026-08-24 Flash beta clean-install release readiness（历史 PARTIAL）：可发布 tarball、隔离安装、
+  apply 幂等、negative gates、`212/212` 测试和 `0` security findings 已完成；唯一获授权的
+  clean-artifact DeepSeek Flash 请求失败且不得重试，历史账本已达 `3/3`。下一任务需在不发
+  Provider 请求的前提下定位 child exit `1` / 缺失 `thread.started`；该缺陷已由后续 catalog
+  contract/offline hardening 任务修复并完成离线生命周期，任何新增真实请求仍须明确授权。
+
 ## 已完成（local / verified）
 
 - [x] 2026-08-24 基于 `4f0a10a` 完成 External Transport Phase 2 control plane：Doctor、

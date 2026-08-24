@@ -114,6 +114,12 @@ node scripts/install.mjs \
 如果 Host 为 Blocked 或 Unknown，应停在 Doctor/dry-run；`--apply` 会在 active Provider
 安装前 fail closed。
 
+精确 DeepSeek Flash Beta 候选为 Codex CLI `0.149.0` 提供独立的 package artifact
+安装路径。它必须同时使用 `--transport external` 与 `--external-flash-beta`；该选项只安装
+配置，普通 External 路由仍保持 default-off。完整步骤见
+[Flash Beta 干净安装指南](docs/flash-beta-clean-install.md)。这不提升 V4 Pro、MiniMax 或
+Qwen External 支持状态。
+
 不要在 issue、日志或截图中放入 API key、凭据、私密任务正文、私有文件路径或敏感数据。
 
 本项目不是 OpenAI 官方产品，不是 Codex 替代品，不代表所有模型都兼容，也不证明成本
@@ -306,6 +312,10 @@ Agent，只能在确认过的正式命令中增加 `--migrate-legacy`；见
 ```sh
 --catalog-source /absolute/path/to/catalog-or-setup-script
 ```
+
+从 package artifact 安装时，可以用 `--home-dir` 指向隔离的绝对用户目录；Doctor、
+Verifier 与 Uninstall 接受相同选项。该机制用于 clean fixture，不会改变 External child
+访问 macOS Keychain 时使用的真实用户 Home。
 
 ## 3. 应用配置并验证
 

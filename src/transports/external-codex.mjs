@@ -6,7 +6,12 @@ import {
 } from '../external-flash-gate.mjs';
 import { transitionLifecycle, validateTransportAdapter, validateTransportRequest } from '../transport-contract.mjs';
 import { acquireExternalSlot, assertExternalSlot, finalizeExternalArchive, releaseExternalSlot } from './external-archive.mjs';
-import { resolveExternalProviderTuple, validateCredentialCommand, writeMinimalExternalHome } from './external-config.mjs';
+import {
+  prepareProductionExternalCatalog,
+  resolveExternalProviderTuple,
+  validateCredentialCommand,
+  writeMinimalExternalHome,
+} from './external-config.mjs';
 import { collectExternalExecution } from './external-collection.mjs';
 import { buildExternalEvidenceDetails, buildExternalTransportEvidence, containsCredentialText } from './external-evidence.mjs';
 import {
@@ -120,6 +125,10 @@ export function createExternalCodexTransport(options = {}) {
         resolveExecutable(codexPath),
         resolveExecutable(checkedCredential.command),
       ]);
+      const productionCatalog = testMode
+        ? null
+        : options.preparedProductionCatalog
+          ?? await prepareProductionExternalCatalog({ catalogSource, request });
       const [workspaceBefore, parentBefore] = await Promise.all([
         snapshotTree(resolved.approvedRoot),
         snapshotParentConfiguration(context.parentCodexHome),
@@ -132,6 +141,8 @@ export function createExternalCodexTransport(options = {}) {
         request,
         credentialCommand: checkedCredential,
         allowFixtureCredential: testMode,
+        preparedCatalog: productionCatalog,
+        productionCatalogRequired: !testMode,
       });
       const credentialPreflight = await preflightExternalCredential({
         credentialCommand: checkedCredential,
@@ -327,6 +338,7 @@ export function createExternalCodexTransport(options = {}) {
         evidenceDetails,
         archiveRef: archived.archiveRef,
         authorization: permitMetadata,
+        credentialPreflight: state.credentialPreflight,
       });
       return state.final;
     } catch (error) {

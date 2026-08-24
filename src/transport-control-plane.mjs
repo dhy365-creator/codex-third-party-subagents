@@ -187,14 +187,24 @@ export function installerTransportPlan({
   providerId,
   providerRole,
   model,
+  externalFlashBeta = false,
 } = {}) {
   const requested = normalizeTransportPreference(requestedTransport);
   const nativeAllowed = compatibility?.configurationInstallAllowed === true;
   const explicitExternal = requested === TRANSPORTS.EXTERNAL_CODEX;
-  const configurationDecision = explicitExternal || !nativeAllowed
+  const exactFlashBeta = externalFlashBeta === true
+    && explicitExternal
+    && providerId === 'deepseek'
+    && providerRole === 'deepseek_worker'
+    && model === 'deepseek-v4-flash';
+  const configurationDecision = exactFlashBeta
+    ? SELECTION_DECISIONS.ALLOW
+    : explicitExternal || !nativeAllowed
     ? SELECTION_DECISIONS.BLOCK
     : SELECTION_DECISIONS.ALLOW;
-  const reason = explicitExternal
+  const reason = exactFlashBeta
+    ? 'Flash Beta configuration install is allowed; External execution remains default-off and separately gated'
+    : explicitExternal
     ? 'Public External installation remains disabled; Phase 3 uses a separate controlled Flash E2E entry point'
     : nativeAllowed
       ? 'Native configuration installation remains allowed by the Host compatibility contract'
@@ -203,8 +213,11 @@ export function installerTransportPlan({
     phase: EXTERNAL_CONTROL_PLANE.phase,
     requestedTransport: requested,
     configurationDecision,
-    selectedTransport: configurationDecision === SELECTION_DECISIONS.ALLOW ? TRANSPORTS.NATIVE : null,
+    selectedTransport: configurationDecision === SELECTION_DECISIONS.ALLOW && !exactFlashBeta
+      ? TRANSPORTS.NATIVE
+      : null,
     applyAllowed: configurationDecision === SELECTION_DECISIONS.ALLOW,
+    externalFlashBetaConfiguration: exactFlashBeta,
     providerId,
     providerRole,
     model,

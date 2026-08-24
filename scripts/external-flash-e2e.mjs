@@ -6,7 +6,8 @@ import { readExternalLiveRequestLedger } from '../src/external-live-request-ledg
 import { redactText } from '../src/transports/external-redaction.mjs';
 
 const VALUE_FLAGS = new Set([
-  'state-root', 'codex', 'catalog', 'cwd', 'approved-root', 'parent-codex-home', 'authorization-id',
+  'state-root', 'billing-ledger-root', 'codex', 'catalog', 'cwd', 'approved-root',
+  'parent-codex-home', 'authorization-id',
 ]);
 const BOOLEAN_FLAGS = new Set(['execute', 'enable-external-flash', 'authorize-billable', 'help']);
 
@@ -33,7 +34,8 @@ function help() {
     '',
     'Required flags:',
     '  --execute --enable-external-flash --authorize-billable',
-    '  --state-root <absolute> --codex <absolute> --catalog <absolute>',
+    '  --state-root <absolute> --billing-ledger-root <absolute>',
+    '  --codex <absolute> --catalog <absolute>',
     '  --cwd <absolute> --approved-root <absolute> --parent-codex-home <absolute>',
     '  --authorization-id <bounded-id>',
     '',
@@ -49,8 +51,12 @@ async function main() {
   for (const name of VALUE_FLAGS) {
     if (!parsed[name]) throw new Error(`--${name} is required`);
   }
+  for (const name of [...VALUE_FLAGS].filter((value) => value !== 'authorization-id')) {
+    if (!path.isAbsolute(parsed[name])) throw new Error(`--${name} requires an absolute path`);
+  }
   const options = {
     stateRoot: path.resolve(parsed['state-root'] ?? ''),
+    billingLedgerRoot: path.resolve(parsed['billing-ledger-root'] ?? ''),
     codexPath: path.resolve(parsed.codex ?? ''),
     catalogSource: path.resolve(parsed.catalog ?? ''),
     cwd: path.resolve(parsed.cwd ?? ''),
@@ -68,6 +74,7 @@ async function main() {
       status: 'completed',
       requestCount: result.requestCount,
       requestLimit: result.requestLimit,
+      fixtureRequestCount: result.fixtureRequestCount,
       providerId: result.providerId,
       model: result.model,
       transport: result.transport,
@@ -76,9 +83,10 @@ async function main() {
       runtimeVerified: result.runtimeVerified,
       challengeVerified: result.challengeVerified,
       evidenceId: result.evidenceId,
+      credentialPreflight: result.credentialPreflight,
     }, null, 2)}\n`);
   } catch (error) {
-    const count = await readExternalLiveRequestLedger(options.stateRoot)
+    const count = await readExternalLiveRequestLedger(options.billingLedgerRoot)
       .then((ledger) => ledger.attempts.length, () => null);
     process.stderr.write(`${JSON.stringify({
       status: 'failed',

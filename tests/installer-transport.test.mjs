@@ -12,6 +12,11 @@ const fixtureCatalog = path.join(
   'fixtures',
   'catalog.json',
 );
+const productionCatalog = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'fixtures',
+  'production-catalog.json',
+);
 
 function customAgentHost(version = '0.147.0') {
   const compatibility = evaluateHostCompatibility({ version, multiAgent: true });
@@ -104,6 +109,58 @@ test('Installer apply cannot activate the controlled External production path', 
     fs.stat(path.join(fixture.codexDir, 'codex-third-party-workers-install.json')),
     /ENOENT/,
   );
+});
+
+test('explicit Flash Beta install writes configuration without enabling External routing', async (t) => {
+  const fixture = await setup(t);
+  const applied = await install({
+    ...fixture.options,
+    catalogSource: productionCatalog,
+    transport: 'external',
+    externalFlashBeta: true,
+    apply: true,
+    inspectCustomAgentHostImpl: async () => customAgentHost('0.149.0'),
+    keychainReadyImpl: async () => true,
+  });
+  assert.equal(applied.applied, true);
+  assert.equal(applied.transportPlan.externalFlashBetaConfiguration, true);
+  assert.equal(applied.transportPlan.selectedTransport, null);
+  assert.equal(applied.transportPlan.external.featureEnabled, false);
+  assert.equal(applied.transportPlan.external.runtimeRouteEnabled, false);
+  assert.equal(applied.transportPlan.thirdPartyLiveRequests, 0);
+  const config = JSON.parse(await fs.readFile(applied.environment.configPath, 'utf8'));
+  assert.equal(config.model, 'deepseek-v4-flash');
+});
+
+test('explicit Flash Beta install rejects an incomplete production catalog before writes', async (t) => {
+  const fixture = await setup(t);
+  let credentialChecked = false;
+  await assert.rejects(install({
+    ...fixture.options,
+    transport: 'external',
+    externalFlashBeta: true,
+    apply: true,
+    inspectCustomAgentHostImpl: async () => customAgentHost('0.149.0'),
+    keychainReadyImpl: async () => { credentialChecked = true; return true; },
+  }), (error) => error.code === 'PRODUCTION_CATALOG_INVALID');
+  assert.equal(credentialChecked, false);
+  assert.equal(await fs.readFile(fixture.configPath, 'utf8'), fixture.sentinel);
+  await assert.rejects(
+    fs.stat(path.join(fixture.codexDir, 'codex-third-party-workers-install.json')),
+    /ENOENT/u,
+  );
+});
+
+test('Flash Beta install flag is exact-tuple only', async (t) => {
+  const fixture = await setup(t);
+  await assert.rejects(install({
+    ...fixture.options,
+    model: 'pro',
+    transport: 'external',
+    externalFlashBeta: true,
+    apply: true,
+    keychainReadyImpl: async () => true,
+  }), /Public External installation remains disabled/u);
 });
 
 test('Installer keeps Native configuration behavior and reports blocked 0.149 analysis', async (t) => {

@@ -37,6 +37,9 @@ test('CLI rejects any API-key flag', () => {
   assert.throws(() => parseArgs(['--api-key', 'secret']), /unknown option/);
   assert.equal(parseArgs(['--migrate-legacy'])['migrate-legacy'], true);
   assert.equal(parseArgs(['--transport', 'external']).transport, 'external');
+  assert.equal(parseArgs(['--home-dir', '/tmp/fixture'])['home-dir'], '/tmp/fixture');
+  assert.equal(parseArgs(['--external-flash-beta'])['external-flash-beta'], true);
+  assert.throws(() => parseArgs(['--home-dir', 'relative']), /absolute path/);
 });
 
 test('post-install success signal appears only after complete local verification', () => {
@@ -112,6 +115,8 @@ test('Doctor is wired as a read-only command and version metadata is aligned', a
   );
   assert.equal(packageMetadata.scripts.doctor, 'node scripts/doctor.mjs');
   assert.equal(packageMetadata.version, '0.4.0-beta.2');
+  assert.equal(packageMetadata.bin['codex-third-party-subagents-install'], 'scripts/install.mjs');
+  assert.deepEqual(packageMetadata.files.slice(0, 2), ['src/', 'scripts/']);
 
   const doctor = await fs.readFile(path.join(root, 'src', 'doctor.mjs'), 'utf8');
   assert.doesNotMatch(doctor, /\b(?:writeFile|appendFile|mkdir|chmod|rename|unlink|rm)\s*\(/);

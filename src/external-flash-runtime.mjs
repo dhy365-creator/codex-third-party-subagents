@@ -18,6 +18,7 @@ import { keychainReady } from './keychain.mjs';
 import { resolveProviderPack } from './provider-packs.mjs';
 import { PERMISSION_PROFILES, TRANSPORTS } from './transport-contract.mjs';
 import { createExternalCodexTransport } from './transports/external-codex.mjs';
+import { prepareProductionExternalCatalog } from './transports/external-config.mjs';
 import { resolveExternalUserHome } from './transports/external-user-home.mjs';
 import {
   assertPrivateTree,
@@ -83,6 +84,7 @@ function canonicalRequest(cwd, authorizationId) {
 export async function runExternalFlashProductionE2E(options = {}) {
   if (process.platform !== 'darwin') throw new Error('External Flash production E2E is macOS-only');
   const stateRoot = requireAbsolute(options.stateRoot, 'stateRoot');
+  const billingLedgerRoot = requireAbsolute(options.billingLedgerRoot ?? stateRoot, 'billingLedgerRoot');
   const codexPath = requireAbsolute(options.codexPath, 'codexPath');
   const catalogSource = requireAbsolute(options.catalogSource, 'catalogSource');
   const cwd = requireAbsolute(options.cwd, 'cwd');
@@ -107,13 +109,22 @@ export async function runExternalFlashProductionE2E(options = {}) {
   if (!credentialReady) throw new Error('DeepSeek Keychain credential is not ready');
   const codexVersion = await inspectCodexVersion(codexPath, options.execFileImpl);
   await ensurePrivateDirectory(stateRoot);
+  await ensurePrivateDirectory(billingLedgerRoot);
   const evidenceDirectory = path.join(stateRoot, 'verified-evidence');
   await ensurePrivateDirectory(evidenceDirectory);
   const privateState = await assertPrivateTree(stateRoot, { allowedExecutable: codexPath });
   if (!privateState.pass) throw new Error('External runtime root is not owner-only');
+  const privateBilling = billingLedgerRoot === stateRoot
+    ? privateState
+    : await assertPrivateTree(billingLedgerRoot, { allowedExecutable: codexPath });
+  if (!privateBilling.pass) throw new Error('External billing ledger root is not owner-only');
   const active = await lstatIfExists(path.join(stateRoot, 'active.json'));
-  const ledger = await readExternalLiveRequestLedger(stateRoot);
+  const billingLedger = await readExternalLiveRequestLedger(billingLedgerRoot);
+  const fixtureLedger = billingLedgerRoot === stateRoot
+    ? billingLedger
+    : await readExternalLiveRequestLedger(stateRoot);
   const { nonce, request } = canonicalRequest(cwd, authorizationId);
+  const preparedProductionCatalog = await prepareProductionExternalCatalog({ catalogSource, request });
   const permit = createExternalFlashExecutionPermit({
     taskName: request.taskName,
     requestedTransport: request.transportPreference,
@@ -132,7 +143,7 @@ export async function runExternalFlashProductionE2E(options = {}) {
     runtimeRootReady: privateState.pass,
     evidenceDestinationReady: true,
     busy: active !== null,
-    liveRequestCount: ledger.attempts.length,
+    liveRequestCount: billingLedger.attempts.length,
     liveRequestLimit: EXTERNAL_FLASH_LIVE_REQUEST_LIMIT,
     authorizationId,
     challenge: nonce,
@@ -147,6 +158,7 @@ export async function runExternalFlashProductionE2E(options = {}) {
       args: ['find-generic-password', '-a', keychainAccount, '-s', pack.keychainService, '-w'],
     },
     executionPermit: permit,
+    preparedProductionCatalog,
     userHome,
     sourceEnv: options.env ?? process.env,
     outputLimits: options.outputLimits,
@@ -154,12 +166,18 @@ export async function runExternalFlashProductionE2E(options = {}) {
     now: options.now ?? (() => new Date()),
   });
   const prepared = await adapter.prepare(request, { approvedRoot, parentCodexHome });
-  let attempt = null;
+  let billingAttempt = null;
+  let fixtureAttempt = null;
   try {
-    attempt = await beginExternalLiveRequest(stateRoot, {
+    billingAttempt = await beginExternalLiveRequest(billingLedgerRoot, {
       purpose: 'canonical production-path Flash E2E',
     });
-    if (attempt.number !== permit.liveRequestNumber) throw new Error('live-request ledger and permit disagree');
+    fixtureAttempt = billingLedgerRoot === stateRoot
+      ? billingAttempt
+      : await beginExternalLiveRequest(stateRoot, { purpose: 'clean-install local runtime mirror' });
+    if (billingAttempt.number !== permit.liveRequestNumber) {
+      throw new Error('live-request ledger and permit disagree');
+    }
     const execution = await adapter.execute(prepared);
     await adapter.collect(execution);
     const final = await adapter.cleanup(execution);
@@ -171,12 +189,16 @@ export async function runExternalFlashProductionE2E(options = {}) {
     }
     const evidenceId = sha256(JSON.stringify(final.evidence));
     await writeExternalFlashEvidence(stateRoot, final.evidence);
-    await finishExternalLiveRequest(stateRoot, attempt.number, {
+    await finishExternalLiveRequest(billingLedgerRoot, billingAttempt.number, {
       outcome: 'completed',
       evidenceId,
     });
+    if (billingLedgerRoot !== stateRoot) {
+      await finishExternalLiveRequest(stateRoot, fixtureAttempt.number, { outcome: 'completed', evidenceId });
+    }
     return Object.freeze({
-      requestCount: attempt.number,
+      requestCount: billingAttempt.number,
+      fixtureRequestCount: fixtureAttempt.number,
       requestLimit: EXTERNAL_FLASH_LIVE_REQUEST_LIMIT,
       providerId: final.evidence.providerId,
       model: final.evidence.model,
@@ -186,13 +208,17 @@ export async function runExternalFlashProductionE2E(options = {}) {
       runtimeVerified: final.evidence.runtimeVerified,
       challengeVerified: true,
       evidenceId,
+      credentialPreflight: final.credentialPreflight,
       result: final.result,
       evidence: final.evidence,
       authorization: final.authorization,
     });
   } catch (error) {
-    if (attempt) {
-      await finishExternalLiveRequest(stateRoot, attempt.number, { outcome: 'failed' }).catch(() => {});
+    if (billingAttempt) {
+      await finishExternalLiveRequest(billingLedgerRoot, billingAttempt.number, { outcome: 'failed' }).catch(() => {});
+    }
+    if (fixtureAttempt && billingLedgerRoot !== stateRoot) {
+      await finishExternalLiveRequest(stateRoot, fixtureAttempt.number, { outcome: 'failed' }).catch(() => {});
     }
     throw error;
   }

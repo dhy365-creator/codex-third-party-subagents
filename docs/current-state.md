@@ -2,6 +2,46 @@
 
 最后更新：2026-08-24
 
+## Flash production catalog contract 与离线 release hardening（本地已验证）
+
+- 已修复 clean-install 将 minimal unit-test catalog 提升为 production `model_catalog_json`
+  的缺陷。新增精确 Codex CLI `0.149.0` / DeepSeek V4 Flash production catalog contract，
+  覆盖全部本地解析必需字段、nested shape/type/bounds、唯一目标模型、文本 modality 与
+  instructions/template 约束；仅改名不能绕过语义验证。
+- production runner 在 execution permit 创建、maintainer/fixture ledger 增量、slot、execution
+  tree 和 child launch 前完成 catalog snapshot/validation；invalid catalog 回归证明 ledger `0`、
+  无 active slot、无 execution tree、无 strict success evidence。真实 Codex `0.149.0` 使用
+  unreachable loopback endpoint 与 fake credential 的离线探针已捕获 `thread.started`，未连接 Provider。
+- `0.4.0-beta.2` tarball 已本地构建并在全新隔离 fixture 完成 dry-run/apply、重复 apply、
+  fresh-process Doctor/Verifier、uninstall、第二次安全失败与 reinstall；artifact 包含 validator，
+  不含 tests/ledger/evidence，installed `src/`/`scripts/` 与 worktree 一致，无 developer-tree dependency。
+- 完整 `npm test`、artifact/source/fixture secret 与 personal-path scan、`git diff --check` 和
+  Codex Security diff scan 均通过；Security scan 覆盖 13 个 changed production surfaces，
+  `0` findings。历史 maintainer ledger 仍为 `3/3`，失败 clean fixture ledger 仍为 `1/3`，
+  本任务 Provider request 为 `0`，Keychain 仅检查存在性且未修改/暴露。
+- 以上仅是 local/offline engineering evidence；clean fixture `runtimeVerified=false`，External
+  public route 仍 default-off。`BETA_READINESS = NOT_READY_FOR_FLASH_BETA_RC`，仍需未来单独授权的
+  installed-artifact Provider-backed Flash E2E 与 ChatGPT review/用户验收。
+
+## Flash beta clean-install release readiness（历史 PARTIAL）
+
+- 基于 Phase 3 接受基线 `d34b26d086d6e6e882786d8a9c91337a70c1a677` 在专用
+  worktree 完成可发布 tarball、隔离 clean fixture、本地 tarball 安装、dry-run/apply/幂等、
+  negative gates 与迁移回归；完整 `npm test` 为 `212/212` PASS，Codex Security 扫描
+  为 `0` findings。
+- Installer 仅对精确 `DeepSeek / deepseek-v4-flash / external` beta tuple 开放显式配置写入；
+  全局 External registry/factory、feature gate 与 runtime route 仍 default-off。CLI 的
+  `--home-dir` 允许隔离安装/Doctor/Verifier/uninstall，strict evidence 绑定 owner-only
+  installation identity 与 canonical runtime root，跨 fixture 复制和 legacy unbound evidence
+  均 fail closed。
+- 本任务授权的唯一一次实际 Provider 请求已发出且失败，未重试。历史账本 `2/3 -> 3/3`，
+  clean fixture 账本 `0/3 -> 1/3`，两者新增 outcome 均为 `failed`；child exit `1`，没有
+  `thread.started`，因此 `providerResolved/taskDelivered/runtimeExecuted/runtimeVerified`
+  均为 `false`，没有 strict success evidence。
+- 失败后 active slot 与相关进程均不存在，配置仍持久化，Doctor/Verifier 未增加请求。
+  按验收停止条件，uninstall/reinstall 未执行；当前 `BETA_READINESS =
+  NOT_READY_FOR_FLASH_BETA_RC`。改动保持 uncommitted，未 push/merge/tag/release/deploy/publish。
+
 ## External Transport Phase 3 Flash production E2E（本地已验证）
 
 - 在专用 worktree 完成受控 DeepSeek V4 Flash production path：全局 registry/factory

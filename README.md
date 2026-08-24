@@ -93,6 +93,7 @@ and independent user acceptance remain unverified. See the
 - [Demos](docs/demos/README.md)
 - [FAQ](docs/faq.md)
 - [Security](SECURITY.md)
+- [DeepSeek Flash Beta clean install](docs/flash-beta-clean-install.md)
 - [Contributing](CONTRIBUTING.md)
 - [Roadmap](ROADMAP.md)
 
@@ -126,6 +127,13 @@ plan first, then see the [complete install guide](#requirements), restart Codex
 Desktop after applying, and run `npm run verify -- --provider deepseek`.
 On a blocked or unknown Host, stop at Doctor/dry-run: `--apply` intentionally
 fails closed before an active provider installation.
+
+The exact DeepSeek Flash Beta candidate has a separate package-artifact path for
+Codex CLI `0.149.0`. It requires `--transport external` together with
+`--external-flash-beta`; this installs configuration only and leaves ordinary
+External routing default-off. See the
+[clean-install guide](docs/flash-beta-clean-install.md). This does not promote
+V4 Pro, MiniMax, or Qwen External support.
 
 Do not put API keys, credentials, private task text, private filesystem paths,
 or sensitive data in issues, logs, or screenshots.
@@ -341,6 +349,11 @@ the actively routed provider pack without changing the main OpenAI thread.
 
 For an offline installation, add
 `--catalog-source /absolute/path/to/catalog-or-setup-script`.
+
+Package-artifact installations can target an isolated absolute user root with
+`--home-dir`; Doctor, Verifier, and Uninstall accept the same option. This is
+the supported clean-fixture mechanism and does not change the real macOS home
+used by the External child for Keychain access.
 
 ## 3. Apply and verify
 
