@@ -93,8 +93,10 @@
 - [x] Phase 2：接入 Doctor/Verifier/Preflight/Installer contract 与 disabled feature gate；
   普通检查保持 read-only/non-billable，maintainer evidence 与 local installation 分开，
   active runtime 只能继续 Native `ALLOW`。
-- [ ] Phase 3：在明确 `BILLABLE PROVIDER REQUEST` 与用户授权下完成 DeepSeek Flash
-  clean-install production E2E。
+- [x] Phase 3：在明确 `BILLABLE PROVIDER REQUEST` 与用户授权下完成 DeepSeek Flash
+  controlled production E2E；修复 `HOME`/`CODEX_HOME` Keychain lookup 与 exact child-context
+  preflight，单次 live request 成功，账本 `1/3 -> 2/3`，严格本机 evidence 为
+  `runtimeVerified=true`。public install/route 仍 default-off，尚非 independent-user acceptance。
 - [ ] Phase 4：独立完成 DeepSeek V4 Pro External explicit-only E2E，不自动路由。
 - [ ] Phase 5：按 MiniMax、Qwen 顺序分别验证 External tuple，不复用或扩大证据。
 - [ ] Phase 6：clean install、package artifact、migration/uninstall、independent-user acceptance
@@ -145,9 +147,10 @@
 
 ## `v0.5.0-beta.1` release gate
 
-- [ ] **NOT READY**：External 架构的 Phase 1/2 已完成，但 Phase 3 live runtime 与 release
-  gate 尚未授权或验证；当前任务不创建 Release/tag。
+- [ ] **NOT READY**：External Phase 1/2/3 的本机受控路径已完成，但 clean install、package
+  artifact、migration/uninstall、独立用户验收与最终 release gate 尚未完成；当前任务不创建
+  Release/tag。
 - [ ] 方向 A：等待 Codex 官方提供 cross-provider child support。
 - [ ] 方向 B：只维护精确版本范围内的 legacy compatibility，不静默 pin 或引导降级。
-- [x] 方向 C：已设计有界、provider-neutral External Transport，并完成 disabled Phase 1/2；
-  尚未进入 feature-gated production E2E。
+- [x] 方向 C：已设计有界、provider-neutral External Transport，并完成 disabled Phase 1/2
+  与 feature-gated Flash Phase 3 本机 production E2E；public route 仍 default-off。

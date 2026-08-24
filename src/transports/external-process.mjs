@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { EXTERNAL_DISABLED_FEATURES } from './external-config.mjs';
 import { sanitizeStderrLog, sanitizeStdoutLog } from './external-evidence.mjs';
 import { sha256, writePrivateFile } from './external-fs-safety.mjs';
+import { validateExternalUserHome } from './external-user-home.mjs';
 
 export const DEFAULT_OUTPUT_LIMITS = Object.freeze({
   stdoutBytes: 1024 * 1024,
@@ -64,9 +65,12 @@ export async function resolveExecutable(executable) {
   return resolved;
 }
 
-export function isolatedChildEnvironment({ codexHome, tmpDir, executablePaths = [], sourceEnv = process.env } = {}) {
-  if (!path.isAbsolute(codexHome ?? '') || !path.isAbsolute(tmpDir ?? '')) {
-    throw new Error('isolated CODEX_HOME and TMPDIR must be absolute');
+export function isolatedChildEnvironment({
+  codexHome, tmpDir, userHome, executablePaths = [], sourceEnv = process.env,
+} = {}) {
+  if (!path.isAbsolute(codexHome ?? '') || !path.isAbsolute(tmpDir ?? '')
+    || !path.isAbsolute(userHome ?? '')) {
+    throw new Error('isolated CODEX_HOME, TMPDIR, and real user HOME must be absolute');
   }
   const safePath = [...new Set([
     path.dirname(process.execPath),
@@ -80,7 +84,7 @@ export function isolatedChildEnvironment({ codexHome, tmpDir, executablePaths = 
   ])].join(':');
   const env = {
     CODEX_HOME: codexHome,
-    HOME: codexHome,
+    HOME: userHome,
     TMPDIR: tmpDir,
     PATH: safePath,
     LANG: sourceEnv.LANG ?? 'en_US.UTF-8',
@@ -124,6 +128,7 @@ export async function launchExternalProcess({
   credentialCommandPath,
   codexHome,
   tmpDir,
+  userHome,
   cwd,
   schemaPath,
   resultPath,
@@ -151,11 +156,13 @@ export async function launchExternalProcess({
   const [executable, credentialExecutable] = await Promise.all([
     resolveExecutable(codexPath),
     resolveExecutable(credentialCommandPath),
+    validateExternalUserHome(userHome),
   ]);
   const args = externalCodexArgs({ cwd, schemaPath, resultPath, permissionProfile });
   const env = isolatedChildEnvironment({
     codexHome,
     tmpDir,
+    userHome,
     executablePaths: [executable, credentialExecutable],
     sourceEnv,
   });

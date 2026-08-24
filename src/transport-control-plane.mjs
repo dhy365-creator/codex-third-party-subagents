@@ -13,7 +13,7 @@ import {
 const PERMISSIONS = Object.freeze(Object.values(PERMISSION_PROFILES));
 
 export const EXTERNAL_CONTROL_PLANE = Object.freeze({
-  phase: 2,
+  phase: 3,
   name: TRANSPORTS.EXTERNAL_CODEX,
   modulePresent: true,
   featureEnabled: false,
@@ -22,7 +22,7 @@ export const EXTERNAL_CONTROL_PLANE = Object.freeze({
   billable: true,
   maxConcurrency: 1,
   permissionProfiles: PERMISSIONS,
-  disabledReason: 'EXTERNAL_TRANSPORT_DISABLED_UNTIL_PHASE_3',
+  disabledReason: 'EXTERNAL_TRANSPORT_DEFAULT_OFF_REQUIRES_EXPLICIT_FLASH_E2E_GATE',
 });
 
 const FLASH_MAINTAINER_EVIDENCE = Object.freeze({
@@ -97,7 +97,7 @@ export function externalTransportEligibility({
   let reason = 'External Transport prerequisites and local runtime evidence are ready';
   if (!modulePresent) reason = 'External Transport module is unavailable';
   else if (!featureEnabled || !runtimeRouteEnabled) {
-    reason = 'External Transport execution is disabled until Phase 3';
+    reason = 'External Transport is default-off and requires the controlled Phase 3 Flash gate';
   } else if (!prerequisitesReady) reason = 'External Transport prerequisites are incomplete';
   else if (!localRuntimeVerified) reason = 'External local installation runtime evidence is unavailable';
   return Object.freeze({
@@ -195,7 +195,7 @@ export function installerTransportPlan({
     ? SELECTION_DECISIONS.BLOCK
     : SELECTION_DECISIONS.ALLOW;
   const reason = explicitExternal
-    ? 'External Transport activation requires Phase 3; Phase 2 is inspect and dry-run only'
+    ? 'Public External installation remains disabled; Phase 3 uses a separate controlled Flash E2E entry point'
     : nativeAllowed
       ? 'Native configuration installation remains allowed by the Host compatibility contract'
       : `Native configuration is unavailable and ${EXTERNAL_CONTROL_PLANE.disabledReason}`;

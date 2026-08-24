@@ -1,7 +1,8 @@
 # External transport security model
 
-Status: scoped threat model plus Phase 2 control-plane enforcement. External
-execution remains disabled and unreachable from the production runtime path.
+Status: scoped threat model plus Phase 3 controlled Flash enforcement. External
+execution remains default-off and unreachable from public/automatic runtime
+paths; one exact maintainer-gated Flash production path has strict local evidence.
 
 ## Overview
 

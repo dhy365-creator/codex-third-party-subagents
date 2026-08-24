@@ -87,10 +87,10 @@ export async function collectExternalExecution(state) {
   }
   if (!childResult || issues.length) outcome = outcome === 'completed' ? 'failed' : outcome;
 
-  await tightenPrivateTree(state.paths.root);
+  await tightenPrivateTree(state.paths.root, { allowedExecutable: state.codexExecutable });
   const [secretScan, permissions, parentAfter] = await Promise.all([
     scanTreeForSecrets(state.paths.root),
-    assertPrivateTree(state.paths.root),
+    assertPrivateTree(state.paths.root, { allowedExecutable: state.codexExecutable }),
     snapshotParentConfiguration(state.context.parentCodexHome),
   ]);
   const parentIsolationValid = parentConfigurationUnchanged(state.parentBefore, parentAfter);
@@ -107,6 +107,7 @@ export async function collectExternalExecution(state) {
       model: state.request.model,
       endpoint: state.pack.apiBase,
       taskSha256: state.taskSha256,
+      configSha256: state.configured.configSha256,
     },
     stdinDelivered: processResult.stdinDelivered,
   });

@@ -10,6 +10,10 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 const args = process.argv.slice(2);
+if (args.includes('--version')) {
+  process.stdout.write('codex-cli 0.149.0\\n');
+  process.exit(0);
+}
 const valueAfter = (name) => args[args.indexOf(name) + 1];
 const mode = (await fs.readFile(path.join(process.cwd(), '.fake-mode'), 'utf8')).trim();
 if (mode === 'forced-kill') process.on('SIGTERM', () => {});
@@ -70,9 +74,13 @@ if (['timeout', 'cancel', 'forced-kill'].includes(mode)) {
     model: request.model,
     transport: 'external-codex',
     changedFiles,
-    tests: [{ name: 'fixture-test', status: 'passed', exitCode: 0 }],
+    tests: mode === 'phase3-challenge' ? [] : [{ name: 'fixture-test', status: 'passed', exitCode: 0 }],
     findings: [],
-    summary: mode === 'secret-result' ? 'Bearer ' + 'a'.repeat(32) : 'Fixture child completed.',
+    summary: mode === 'secret-result'
+      ? 'Bearer ' + 'a'.repeat(32)
+      : mode === 'phase3-challenge'
+        ? 'CHALLENGE ' + request.message.match(/challenge-[a-f0-9]{8}-[a-f0-9]{8}/)[0]
+        : 'Fixture child completed.',
     risks: [],
   };
   if (mode === 'scope-claim') result.changedFiles = ['../outside.txt'];
@@ -117,8 +125,10 @@ export async function createExternalTransportFixture(t, {
   testTimeoutMs = null,
   graceMs = 50,
   outputLimits,
+  credentialPreflightExecFileImpl,
 } = {}) {
-  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'external-transport-phase1-'));
+  const createdBase = await fs.mkdtemp(path.join(os.tmpdir(), 'external-transport-phase1-'));
+  const base = await fs.realpath(createdBase);
   const approvedRoot = path.join(base, 'approved');
   const cwd = path.join(approvedRoot, 'workspace');
   const parentCodexHome = path.join(base, 'parent-codex');
@@ -145,10 +155,12 @@ export async function createExternalTransportFixture(t, {
     codexPath,
     catalogSource: path.resolve('tests/fixtures/catalog.json'),
     credentialCommand: { kind: 'fixture', command: credentialPath, args: [] },
+    userHome: base,
     testMode: true,
     testTimeoutMs,
     graceMs,
     outputLimits,
+    credentialPreflightExecFileImpl,
     sourceEnv: {
       PATH: '/unsafe',
       DEEPSEEK_API_KEY: 'must-not-be-inherited',

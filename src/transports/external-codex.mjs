@@ -1,4 +1,9 @@
 import path from 'node:path';
+import {
+  consumeExternalFlashExecutionPermit,
+  externalFlashPermitMetadata,
+  externalFlashResultAccepted,
+} from '../external-flash-gate.mjs';
 import { transitionLifecycle, validateTransportAdapter, validateTransportRequest } from '../transport-contract.mjs';
 import { acquireExternalSlot, assertExternalSlot, finalizeExternalArchive, releaseExternalSlot } from './external-archive.mjs';
 import { resolveExternalProviderTuple, validateCredentialCommand, writeMinimalExternalHome } from './external-config.mjs';
@@ -24,6 +29,8 @@ import {
   resolveExecutable,
 } from './external-process.mjs';
 import { buildExternalPrompt, buildFinalTransportResult, writeExternalResultSchema } from './external-result.mjs';
+import { preflightExternalCredential } from './external-credential-preflight.mjs';
+import { validateExternalUserHome } from './external-user-home.mjs';
 
 export const EXTERNAL_CODEX_TRANSPORT_ENABLED = false;
 
@@ -68,11 +75,14 @@ export function createExternalCodexTransport(options = {}) {
     codexPath,
     catalogSource,
     credentialCommand,
+    userHome,
     testMode = false,
     testTimeoutMs = null,
     graceMs = 3000,
     sourceEnv,
     outputLimits,
+    credentialPreflightExecFileImpl,
+    executionPermit = null,
     now = () => new Date(),
   } = options;
   for (const value of [stateRoot, codexPath, catalogSource]) {
@@ -105,7 +115,11 @@ export function createExternalCodexTransport(options = {}) {
         pack,
         { allowFixture: testMode },
       );
-      await Promise.all([resolveExecutable(codexPath), resolveExecutable(checkedCredential.command)]);
+      const validatedUserHome = await validateExternalUserHome(userHome);
+      const [codexExecutable] = await Promise.all([
+        resolveExecutable(codexPath),
+        resolveExecutable(checkedCredential.command),
+      ]);
       const [workspaceBefore, parentBefore] = await Promise.all([
         snapshotTree(resolved.approvedRoot),
         snapshotParentConfiguration(context.parentCodexHome),
@@ -118,6 +132,15 @@ export function createExternalCodexTransport(options = {}) {
         request,
         credentialCommand: checkedCredential,
         allowFixtureCredential: testMode,
+      });
+      const credentialPreflight = await preflightExternalCredential({
+        credentialCommand: checkedCredential,
+        codexPath,
+        codexHome: paths.home,
+        tmpDir: paths.tmp,
+        userHome: validatedUserHome,
+        sourceEnv,
+        execFileImpl: credentialPreflightExecFileImpl,
       });
       const schemaPath = await writeExternalResultSchema(paths.evidence, request);
       const resultPath = path.join(paths.results, 'result.json');
@@ -134,7 +157,8 @@ export function createExternalCodexTransport(options = {}) {
       preparedStates.set(prepared, {
         phase: 'prepared', request, context, pack, configured, paths, slot, prompt,
         taskSha256: sha256(prompt),
-        workspaceBefore, scopeRoot: resolved.approvedRoot, parentBefore,
+        workspaceBefore, scopeRoot: resolved.approvedRoot, parentBefore, codexExecutable,
+        userHome: validatedUserHome, credentialPreflight,
       });
       return prepared;
     } catch (error) {
@@ -159,12 +183,15 @@ export function createExternalCodexTransport(options = {}) {
   }
 
   async function execute(prepared) {
-    if (!EXTERNAL_CODEX_TRANSPORT_ENABLED && !testMode) {
+    if (!EXTERNAL_CODEX_TRANSPORT_ENABLED && !testMode && !executionPermit) {
       throw externalError(EXTERNAL_ERROR_CODES.DISABLED, 'External Codex transport is disabled');
     }
     const state = preparedStates.get(prepared);
     if (!state || state.phase !== 'prepared') throw externalError(EXTERNAL_ERROR_CODES.EXECUTE, 'prepared handle is invalid');
     try {
+      if (!testMode) {
+        state.productionPermit = consumeExternalFlashExecutionPermit(executionPermit, state.request);
+      }
       await Promise.all([assertExternalSlot(state.slot), assertStableCwd(state.request.cwd)]);
       state.phase = transitionLifecycle(state.phase, 'running');
       state.process = await launchExternalProcess({
@@ -172,6 +199,7 @@ export function createExternalCodexTransport(options = {}) {
         credentialCommandPath: state.configured.credentialCommand.command,
         codexHome: state.paths.home,
         tmpDir: state.paths.tmp,
+        userHome: state.userHome,
         cwd: state.request.cwd,
         schemaPath: path.join(state.paths.evidence, 'result.schema.json'),
         resultPath: path.join(state.paths.results, 'result.json'),
@@ -188,6 +216,25 @@ export function createExternalCodexTransport(options = {}) {
       executionStates.set(execution, state);
       return execution;
     } catch (error) {
+      if (!state.process) {
+        try {
+          await assertExternalSlot(state.slot);
+          const archived = await finalizeExternalArchive({
+            archiveDir: state.paths.archive,
+            executionId: prepared.executionId,
+            request: state.request,
+            status: 'failed',
+            lifecycle: { state: 'cleanup_pending', outcome: 'failed', activeSlotReleased: false },
+            collection: { changedFiles: [], childResult: null, issues: ['execution failed before process launch'] },
+            evidenceRefs: [],
+            now: now(),
+          });
+          await releaseExternalSlot(state.slot, archived.archivePath);
+          state.phase = 'closed';
+        } catch {
+          // Retain the exact active marker when safe finalization cannot be proven.
+        }
+      }
       throw externalError(EXTERNAL_ERROR_CODES.EXECUTE, 'External transport execution failed', error);
     }
   }
@@ -246,20 +293,26 @@ export function createExternalCodexTransport(options = {}) {
         evidenceRefs,
         issues: state.collection.issues,
       });
+      const productionAccepted = !testMode
+        && externalFlashResultAccepted(executionPermit, state.request, state.collection.childResult);
+      const permitMetadata = productionAccepted ? externalFlashPermitMetadata(executionPermit) : null;
       const evidence = buildExternalTransportEvidence({
         request: state.request,
         parsed: state.collection.parsedEvidence,
         evidenceRefs,
         acceptance: {
-          resultValid: state.outcome === 'completed' && Boolean(state.collection.childResult),
+          resultValid: state.outcome === 'completed' && Boolean(state.collection.childResult)
+            && (testMode || productionAccepted),
           workspaceScopeValid: state.collection.workspaceScopeValid,
           lifecycleValid: !lifecycle.orphanDetected,
           credentialSafetyValid: state.collection.secretScan.pass,
           parentIsolationValid: state.collection.parentIsolationValid,
         },
-        codexBinary: codexPath,
-        credentialReady: null,
-        allowRuntimeVerification: false,
+        codexBinary: state.codexExecutable,
+        hostVersion: permitMetadata?.codexVersion ?? null,
+        credentialReady: productionAccepted ? true : null,
+        allowRuntimeVerification: productionAccepted,
+        verifiedAt: productionAccepted ? now().toISOString() : null,
       });
       const evidenceDetails = buildExternalEvidenceDetails({
         parsed: state.collection.parsedEvidence,
@@ -268,7 +321,13 @@ export function createExternalCodexTransport(options = {}) {
         evidenceRefs,
         boundary: testMode ? 'test-fixture' : 'runtime',
       });
-      state.final = Object.freeze({ result, evidence, evidenceDetails, archiveRef: archived.archiveRef });
+      state.final = Object.freeze({
+        result,
+        evidence,
+        evidenceDetails,
+        archiveRef: archived.archiveRef,
+        authorization: permitMetadata,
+      });
       return state.final;
     } catch (error) {
       throw externalError(EXTERNAL_ERROR_CODES.CLEANUP, 'External transport cleanup failed', error);

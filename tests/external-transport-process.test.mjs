@@ -2,7 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { assertExternalProcessGroupClosed } from '../src/transports/external-process.mjs';
+import {
+  assertExternalProcessGroupClosed,
+  isolatedChildEnvironment,
+} from '../src/transports/external-process.mjs';
+import { preflightExternalCredential } from '../src/transports/external-credential-preflight.mjs';
+import { validateExternalUserHome } from '../src/transports/external-user-home.mjs';
 import { createExternalTransportFixture } from './helpers/external-transport-fixture.mjs';
 
 async function runFixture(fixture, request = fixture.request()) {
@@ -49,8 +54,73 @@ test('launcher keeps malicious task text in stdin and uses fixed argv plus an al
   assert.equal(capture.args.includes('--sandbox'), true);
   assert.equal(capture.args.includes('danger-full-access'), false);
   assert.equal(capture.envKeys.includes('DEEPSEEK_API_KEY'), false);
-  assert.equal(capture.home, capture.codexHome);
+  assert.equal(capture.home, fixture.base);
+  assert.notEqual(capture.home, capture.codexHome);
   assert.equal(capture.tmpDir.startsWith(capture.codexHome), true);
+});
+
+test('credential preflight returns only safe metadata and handles whitespace', async (t) => {
+  const fixture = await createExternalTransportFixture(t);
+  const result = await preflightExternalCredential({
+    credentialCommand: { command: fixture.credentialPath, args: [] },
+    codexPath: fixture.codexPath,
+    codexHome: path.join(fixture.base, 'prospective-codex-home'),
+    tmpDir: path.join(fixture.base, 'prospective-tmp'),
+    userHome: fixture.base,
+    execFileImpl: async (_command, _args, options) => {
+      assert.equal(options.env.HOME, fixture.base);
+      assert.notEqual(options.env.HOME, options.env.CODEX_HOME);
+      assert.equal(Object.keys(options.env).some((name) => /API_KEY|TOKEN|SECRET|PASSWORD/u.test(name)), false);
+      return { stdout: Buffer.from('  controlled-value\n') };
+    },
+  });
+  assert.deepEqual(result, {
+    exitCode: 0,
+    credentialPresent: true,
+    credentialNonEmpty: true,
+    normalizationApplied: true,
+  });
+  assert.equal(JSON.stringify(result).includes('controlled-value'), false);
+});
+
+test('credential preflight fails closed for exit 44, other exits, and empty output', async (t) => {
+  const fixture = await createExternalTransportFixture(t);
+  const input = {
+    credentialCommand: { command: fixture.credentialPath, args: [] },
+    codexPath: fixture.codexPath,
+    codexHome: path.join(fixture.base, 'prospective-codex-home'),
+    tmpDir: path.join(fixture.base, 'prospective-tmp'),
+    userHome: fixture.base,
+  };
+  for (const code of [44, 7]) {
+    await assert.rejects(
+      preflightExternalCredential({
+        ...input,
+        execFileImpl: async () => { const error = new Error('hidden'); error.code = code; throw error; },
+      }),
+      (error) => error.code === 'EXTERNAL_CREDENTIAL_PREFLIGHT_FAILED' && error.exitCode === code,
+    );
+  }
+  await assert.rejects(
+    preflightExternalCredential({ ...input, execFileImpl: async () => ({ stdout: Buffer.from(' \n\t') }) }),
+    (error) => error.code === 'EXTERNAL_CREDENTIAL_PREFLIGHT_FAILED'
+      && error.exitCode === 0 && error.credentialNonEmpty === false,
+  );
+});
+
+test('user HOME validation rejects malformed, missing, and symlink paths', async (t) => {
+  const fixture = await createExternalTransportFixture(t);
+  assert.equal(await validateExternalUserHome(fixture.base), fixture.base);
+  await assert.rejects(validateExternalUserHome('relative-home'), /normalized absolute/u);
+  await assert.rejects(validateExternalUserHome(path.join(fixture.base, 'missing')), /ENOENT/u);
+  const linked = path.join(fixture.base, 'linked-home');
+  await fs.symlink(fixture.base, linked);
+  await assert.rejects(validateExternalUserHome(linked), /real directory/u);
+  assert.throws(() => isolatedChildEnvironment({
+    codexHome: path.join(fixture.base, 'codex-home'),
+    tmpDir: path.join(fixture.base, 'tmp'),
+    userHome: 'relative-home',
+  }), /must be absolute/u);
 });
 
 test('bounded stdout is truncated safely and incomplete structured evidence fails closed', async (t) => {

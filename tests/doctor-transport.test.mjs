@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { runDoctor } from '../src/doctor.mjs';
+import { writeExternalFlashEvidence } from '../src/external-evidence-store.mjs';
 import { evaluateHostCompatibility } from '../src/host-compatibility.mjs';
 
 function customAgentHost(version = '0.149.0') {
@@ -29,6 +30,43 @@ async function setupHome(t) {
 
 function check(result, name) {
   return result.checks.find((entry) => entry.name === name);
+}
+
+function strictEvidence() {
+  return {
+    schemaVersion: 1,
+    taskName: 'phase3-flash-e2e-fixture',
+    providerId: 'deepseek',
+    model: 'deepseek-v4-flash',
+    transport: 'external-codex',
+    configured: true,
+    discoverable: null,
+    providerResolved: true,
+    taskDelivered: true,
+    runtimeExecuted: true,
+    runtimeVerified: true,
+    configurationReady: true,
+    ready: true,
+    evidenceSource: 'local-installation',
+    credentialReady: true,
+    hostVersion: '0.149.0',
+    codexBinary: 'codex',
+    verifiedAt: '2026-08-24T00:00:00.000Z',
+    providerAttribution: {
+      sessionRef: 'runtime:session:fixture',
+      providers: ['deepseek'],
+      models: ['deepseek-v4-flash'],
+      endpointRef: 'runtime:config:fixture',
+    },
+    acceptance: {
+      resultValid: true,
+      workspaceScopeValid: true,
+      lifecycleValid: true,
+      credentialSafetyValid: true,
+      parentIsolationValid: true,
+    },
+    evidenceRefs: [{ kind: 'runtime', ref: 'runtime:fixture', sha256: 'a'.repeat(64) }],
+  };
 }
 
 test('Doctor reports Native and disabled External Transport separately on 0.149', async (t) => {
@@ -73,6 +111,22 @@ test('Doctor read-only inspection recognizes an existing owner-only External run
   const after = await fs.stat(runtimeRoot);
   assert.equal(after.mode & 0o777, before.mode & 0o777);
   assert.equal(after.mtimeMs, before.mtimeMs);
+});
+
+test('Doctor reads strict stored Flash evidence without making a live request', async (t) => {
+  const { homeDir, codexDir } = await setupHome(t);
+  const runtimeRoot = path.join(codexDir, 'external-transports', 'codex-third-party-workers');
+  await writeExternalFlashEvidence(runtimeRoot, strictEvidence());
+  const result = await runDoctor({
+    homeDir,
+    platform: 'darwin',
+    provider: 'deepseek',
+    keychainReadyImpl: async () => true,
+    inspectCustomAgentHostImpl: async () => customAgentHost(),
+  });
+  assert.equal(check(result, 'External local runtime evidence')?.status, 'PASS');
+  assert.equal(result.transports.external.localEvidence.runtimeVerified, true);
+  assert.equal(result.transports.external.eligibility.eligible, false);
 });
 
 test('Doctor fails closed on result-like External evidence and keeps Pro evidence unknown', async (t) => {

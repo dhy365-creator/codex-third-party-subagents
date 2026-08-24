@@ -2,6 +2,31 @@
 
 最后更新：2026-08-24
 
+## External Transport Phase 3 Flash production E2E（本地已验证）
+
+- 在专用 worktree 完成受控 DeepSeek V4 Flash production path：全局 registry/factory
+  继续 default-off，仅显式 feature gate、billable authorization、精确 Provider/Model、
+  `read-only`、single-slot 与单调请求账本共同允许执行。
+- 修复 production child 将 `HOME` 与隔离 `CODEX_HOME` 混同导致 Keychain lookup exit `44`
+  的问题：`CODEX_HOME` 保持隔离，`HOME` 来自当前 macOS 用户数据库并经过 absolute/owner/
+  realpath/symlink 校验；child env 仍为最小 allowlist，不含 credential 变量。
+- 新增 exact child-context credential preflight；它在 live ledger 增量和 child launch 前执行
+  同一条 command-backed Keychain lookup，只保留 exit/present/non-empty/normalization 安全
+  元数据，不打印、持久化、哈希或注入 credential value。非零和空输出均 fail closed。
+- 首次入口检查在 Provider 请求前发现历史 execution tree 的已审核 Codex `arg0` symlink
+  验证范围过窄；账本保持 `1/3`。修复后只允许 bounded execution path 下指向已验证 Codex
+  executable/package runtime 的三个已审核链接。
+- 最终非网络门禁通过：`npm test` 为 `208/208` PASS、`git diff --check` PASS、Codex
+  Security diff scan 覆盖 17 个 production source surface 且 `0` findings；secret/personal-path、
+  active import、BUSY/ledger/evidence spoofing 与 Native/provider policy 回归通过。
+- 本任务仅发出 `1` 次实际 Provider 请求；持久账本 `1/3 -> 2/3`，第二条为 `completed`。
+  strict local evidence 为 `providerResolved=true`、`taskDelivered=true`、
+  `runtimeExecuted=true`、`runtimeVerified=true`、challenge verified。Doctor/Verifier 前后账本
+  均为 `2`，没有额外 Provider 请求，active slot 已释放。
+- 该证据仅适用于本机、当前 source、exact Codex CLI `0.149.0` 和 DeepSeek V4 Flash
+  controlled runner；public External install/auto routing 仍禁用，Native `0.149.x` 仍 blocked，
+  Pro/MiniMax/Qwen 未收到请求，独立用户验收、push/merge/tag/release/deploy/publish 均未完成。
+
 ## External Transport Phase 2 control plane（本地 checkpoint）
 
 - 基于 Phase 1 commit `4f0a10a7719426bd9b73d664250ac1489a5ae2c5` 在独立
@@ -193,12 +218,13 @@
 ## 尚未完成或未声称
 
 - 当前 CLI `0.149.0` 与 bundled Desktop `0.149.0-alpha.4.1` 不支持本项目所需的
-  Native OpenAI Main -> third-party Provider child topology。External 方向已完成正式架构、
-  Phase 1 adapter 与 Phase 2 control plane，但 public runtime route 仍禁用；Phase 3 需另行
-  明确授权后才能做 feature-gated Flash production E2E。
+  Native OpenAI Main -> third-party Provider child topology。External Phase 3 Flash controlled
+  production E2E 已在本机通过，但 public runtime route、Installer activation 与 auto routing
+  仍禁用。
 - `0.148.x` 没有可归因的项目 Host evidence，保持 Level D Unknown；不得自动宣告兼容。
-- 已完成 Flash 与显式 Pro 的受控维护者 E2E，但尚未取得独立真实用户验收；验证器仍不会把
-  外部记录自动写成 `runtimeVerified: true`。
+- 已完成 Flash controlled External local E2E 与既有 Flash/显式 Pro 维护者 E2E，但尚未取得
+  独立真实用户验收；Verifier 仅从本机严格 External evidence 读取
+  `transports.external.runtimeVerified=true`，不会提升 Native 或公开支持状态。
 - Pro 的 provider dashboard 归因、跨任务可靠性和公开安装器用户验收仍未完成；继续保持
   explicit-only，不做 Flash/Pro 自动路由。
 - Doctor 对当前用户级 `~/.codex` 父目录权限给出“非 owner-only” **WARN**；安装器不应擅自

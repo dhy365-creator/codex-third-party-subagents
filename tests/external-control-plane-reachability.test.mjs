@@ -14,7 +14,7 @@ import { EXTERNAL_CONTROL_PLANE } from '../src/transport-control-plane.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-test('Phase 1 registry and Phase 2 control-plane gates agree that External is unreachable', () => {
+test('registry and ordinary control-plane gates keep External default-off', () => {
   const entry = TRANSPORT_REGISTRY['external-codex'];
   assert.equal(EXTERNAL_CODEX_TRANSPORT_ENABLED, false);
   assert.equal(entry.enabled, false);
@@ -22,6 +22,7 @@ test('Phase 1 registry and Phase 2 control-plane gates agree that External is un
   assert.equal(EXTERNAL_CONTROL_PLANE.featureEnabled, false);
   assert.equal(EXTERNAL_CONTROL_PLANE.runtimeRouteEnabled, false);
   assert.equal(EXTERNAL_CONTROL_PLANE.factoryAvailable, false);
+  assert.equal(EXTERNAL_CONTROL_PLANE.phase, 3);
   assert.equal(describeTransportRegistry()[0].enabled, false);
 });
 
@@ -41,6 +42,13 @@ test('active control-plane modules do not import or instantiate the External ada
     assert.doesNotMatch(source, /resolveEnabledTransportFactory/u, relative);
     assert.doesNotMatch(source, /from ['"].*\/transports\/external-codex\.mjs['"]/u, relative);
   }
+});
+
+test('only the explicit Phase 3 production runner imports the External adapter', async () => {
+  const source = await fs.readFile(path.join(root, 'src/external-flash-runtime.mjs'), 'utf8');
+  assert.match(source, /createExternalCodexTransport/u);
+  assert.match(source, /createExternalFlashExecutionPermit/u);
+  assert.match(source, /beginExternalLiveRequest/u);
 });
 
 test('control-plane source contains no Provider request implementation', async () => {

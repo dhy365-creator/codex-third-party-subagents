@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { readExternalFlashEvidence } from './external-evidence-store.mjs';
 import { PERMISSION_PROFILES, TRANSPORTS } from './transport-contract.mjs';
 import { EVIDENCE_SOURCES, validateTransportEvidence } from './transport-evidence.mjs';
 import {
@@ -92,7 +93,7 @@ export async function inspectExternalTransportReadiness({
   runtimeRoot,
   permissionProfile = PERMISSION_PROFILES.READ_ONLY,
   credentialReady = null,
-  externalEvidence = null,
+  externalEvidence,
 } = {}) {
   if (!providerPack?.id || !providerPack?.role || !providerPack?.model) {
     throw new Error('provider pack is required for External Transport readiness');
@@ -100,7 +101,16 @@ export async function inspectExternalTransportReadiness({
   const runtimeRootState = await inspectRuntimeRoot(runtimeRoot);
   const permissionReady = Object.values(PERMISSION_PROFILES).includes(permissionProfile);
   const codexExecReady = codexDetected === true && customAgentHost?.version === '0.149.0';
-  const localEvidence = inspectLocalEvidence(externalEvidence, providerPack);
+  let submittedEvidence = externalEvidence;
+  if (submittedEvidence === undefined
+    && providerPack.id === 'deepseek' && providerPack.model === 'deepseek-v4-flash') {
+    try {
+      submittedEvidence = await readExternalFlashEvidence(runtimeRoot);
+    } catch {
+      submittedEvidence = {};
+    }
+  }
+  const localEvidence = inspectLocalEvidence(submittedEvidence, providerPack);
   const prerequisitesReady = codexExecReady
     && runtimeRootState.ready
     && permissionReady
@@ -172,8 +182,8 @@ export function externalReadinessChecks(readiness) {
       name: 'External feature gate',
       status: readiness.featureGate.enabled || readiness.featureGate.runtimeRouteEnabled ? 'BLOCKED' : 'WARN',
       detail: readiness.featureGate.enabled || readiness.featureGate.runtimeRouteEnabled
-        ? 'External execution became reachable before Phase 3'
-        : 'External execution is intentionally disabled and unreachable in Phase 2',
+        ? 'External execution became globally reachable instead of remaining explicitly gated'
+        : 'External execution is default-off; Phase 3 requires its separate controlled Flash gate',
     }),
     Object.freeze({
       name: 'External Codex exec prerequisite',
@@ -224,7 +234,7 @@ export function externalReadinessChecks(readiness) {
       name: 'External Transport eligibility',
       status: readiness.eligibility.eligible ? 'BLOCKED' : 'WARN',
       detail: readiness.eligibility.eligible
-        ? 'External execution unexpectedly became eligible before Phase 3'
+        ? 'External execution unexpectedly became generally eligible'
         : readiness.eligibility.reason,
     }),
   ]);

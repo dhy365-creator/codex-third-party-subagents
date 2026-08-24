@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { catalogIsSafe } from './catalog.mjs';
+import { readExternalFlashEvidence } from './external-evidence-store.mjs';
 import { discoverEnvironment } from './environment.mjs';
 import { fs, lstatIfExists, sha256File } from './fs-utils.mjs';
 import { keychainReady } from './keychain.mjs';
@@ -12,6 +13,7 @@ import {
 } from './host-compatibility.mjs';
 import {
   DEFAULT_PROVIDER_ID as PACK_DEFAULT,
+  RUNTIME_NAMESPACE,
   resolveProviderPack,
 } from './provider-packs.mjs';
 import { buildTransportVerification } from './transport-verification.mjs';
@@ -194,19 +196,43 @@ function incompleteResult({ env, warnings, issue, host, options }) {
 export async function verify(options = {}) {
   const checkedAt = (options.now instanceof Date ? options.now : new Date()).toISOString();
   let env = discoverEnvironment({ provider: options.provider ?? PACK_DEFAULT, ...options, env: options.env ?? process.env });
+  let storedExternalEvidence = options.externalTransportEvidence;
+  if (storedExternalEvidence === undefined
+    && env.providerPack?.id === 'deepseek' && env.providerPack?.model === 'deepseek-v4-flash') {
+    try {
+      storedExternalEvidence = await readExternalFlashEvidence(
+        path.join(env.codexDir, 'external-transports', RUNTIME_NAMESPACE),
+      );
+    } catch {
+      storedExternalEvidence = {};
+    }
+  }
+  const transportOptions = {
+    ...options,
+    externalTransportEvidence: storedExternalEvidence,
+    externalConfigured: options.externalConfigured ?? storedExternalEvidence != null,
+    externalPrerequisitesReady: options.externalPrerequisitesReady
+      ?? storedExternalEvidence?.runtimeVerified === true,
+  };
   const issues = [];
   const warnings = [];
-  const host = await inspectHost(options);
+  const host = await inspectHost(transportOptions);
   const currentHost = hostState(host);
   let manifest;
   try {
     manifest = await readManifest(env);
   } catch (error) {
-    return incompleteResult({ env, warnings, issue: error.message, host, options });
+    return incompleteResult({ env, warnings, issue: error.message, host, options: transportOptions });
   }
 
   if (!manifest) {
-    return incompleteResult({ env, warnings, issue: 'install manifest is missing', host, options });
+    return incompleteResult({
+      env,
+      warnings,
+      issue: 'install manifest is missing',
+      host,
+      options: transportOptions,
+    });
   }
 
   if (!manifest.options?.hostCompatibility?.level) {
@@ -419,7 +445,7 @@ export async function verify(options = {}) {
   return withTransportVerification(result, {
     env,
     host,
-    options,
+    options: transportOptions,
     providerPack: providerPack ?? env.providerPack,
   });
 }

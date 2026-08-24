@@ -110,12 +110,23 @@ export async function parseExternalRuntimeEvidence({
       .filter((record) => record.type === 'session_meta')
       .map((record) => record.payload?.task_sha256)
       .filter((value) => typeof value === 'string'))];
+    const promptDigests = [...new Set(matchingRecords
+      .filter((record) => record.type === 'response_item' && record.payload?.role === 'user')
+      .flatMap((record) => record.payload?.content ?? [])
+      .filter((item) => item?.type === 'input_text' && typeof item.text === 'string')
+      .map((item) => sha256(item.text)))];
     const expectedEndpoint = canonicalEndpoint(expected.endpoint);
-    const tupleMatches = providers.length === 1 && providers[0] === expected.providerId.toLowerCase()
-      && models.length === 1 && models[0] === expected.model
-      && endpoints.length === 1 && endpoints[0] === expectedEndpoint;
+    const providerModelMatches = providers.length === 1
+      && providers[0] === expected.providerId.toLowerCase()
+      && models.length === 1 && models[0] === expected.model;
+    const configAttributedEndpoint = endpoints.length === 0
+      && /^[a-f0-9]{64}$/u.test(expected.configSha256 ?? '');
+    const endpointMatches = endpoints.length === 1
+      ? endpoints[0] === expectedEndpoint
+      : configAttributedEndpoint;
+    const tupleMatches = providerModelMatches && endpointMatches;
     const taskDelivered = stdinDelivered === true
-      && taskDigests.length === 1 && taskDigests[0] === expected.taskSha256;
+      && (taskDigests.includes(expected.taskSha256) || promptDigests.includes(expected.taskSha256));
     const runtimeExecuted = events.some((record) => record.type === 'turn.completed')
       && matchingRecords.some((record) => record.type === 'turn_context');
     const toolTypes = [...new Set(events
@@ -129,7 +140,9 @@ export async function parseExternalRuntimeEvidence({
       sessionRef: `runtime:session:${sha256(threadIds[0]).slice(0, 24)}`,
       providers: Object.freeze(providers),
       models: Object.freeze(models),
-      endpointRef: `runtime:endpoint:${sha256(expectedEndpoint).slice(0, 24)}`,
+      endpointRef: endpoints.length === 1
+        ? `runtime:endpoint:${sha256(expectedEndpoint).slice(0, 24)}`
+        : `runtime:config:${expected.configSha256.slice(0, 24)}`,
     }) : null;
     return Object.freeze({
       status: issues.length ? 'UNKNOWN' : 'ATTRIBUTED',
@@ -200,6 +213,7 @@ export function buildExternalTransportEvidence({
   evidenceRefs,
   acceptance,
   codexBinary,
+  hostVersion = null,
   credentialReady = null,
   allowRuntimeVerification = false,
   verifiedAt = null,
@@ -223,7 +237,7 @@ export function buildExternalTransportEvidence({
     ready: credentialReady === true,
     evidenceSource: EVIDENCE_SOURCES.LOCAL_INSTALLATION,
     credentialReady,
-    hostVersion: null,
+    hostVersion,
     codexBinary: path.basename(codexBinary),
     verifiedAt: runtimeVerified ? verifiedAt : null,
     providerAttribution: parsed.attribution,

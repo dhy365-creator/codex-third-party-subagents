@@ -1,8 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { EVIDENCE_SOURCES } from '../src/transport-evidence.mjs';
+import { writeExternalFlashEvidence } from '../src/external-evidence-store.mjs';
+import { evaluateHostCompatibility } from '../src/host-compatibility.mjs';
 import { buildTransportVerification } from '../src/transport-verification.mjs';
 import { resolveProviderPack } from '../src/provider-packs.mjs';
+import { verify } from '../src/verifier.mjs';
 
 const hash = 'c'.repeat(64);
 
@@ -143,4 +149,28 @@ test('Pro and other provider tuples do not inherit Flash maintainer evidence', (
   });
   assert.equal(pro.transports.external.maintainerEvidence.available, false);
   assert.equal(pro.transports.external.maintainerEvidence.runtimeEvidence, 'UNKNOWN');
+});
+
+test('ordinary Verifier consumes stored strict Flash evidence without a live request', async (t) => {
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'external-verifier-evidence-'));
+  t.after(() => fs.rm(homeDir, { recursive: true, force: true }));
+  const runtimeRoot = path.join(
+    homeDir,
+    '.codex',
+    'external-transports',
+    'codex-third-party-workers',
+  );
+  await writeExternalFlashEvidence(runtimeRoot, evidence(EVIDENCE_SOURCES.LOCAL_INSTALLATION));
+  const compatibility = evaluateHostCompatibility({ version: '0.149.0', multiAgent: true });
+  const checked = await verify({
+    homeDir,
+    provider: 'deepseek',
+    model: 'flash',
+    checkKeychain: false,
+    customAgentHost: { version: '0.149.0', multiAgent: true, compatibility },
+  });
+  assert.equal(checked.transports.external.localEvidenceAvailable, true);
+  assert.equal(checked.transports.external.runtimeVerified, true);
+  assert.equal(checked.transports.external.featureEnabled, false);
+  assert.equal(checked.transports.external.eligibility.eligible, false);
 });

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { reduceCatalogForProvider } from '../catalog.mjs';
 import { resolveProviderPack } from '../provider-packs.mjs';
 import { containsCredentialText } from './external-evidence.mjs';
-import { writePrivateFile } from './external-fs-safety.mjs';
+import { sha256, writePrivateFile } from './external-fs-safety.mjs';
 
 export const EXTERNAL_DISABLED_FEATURES = Object.freeze([
   'apps',
@@ -136,5 +136,11 @@ export async function writeMinimalExternalHome({
     permissionProfile: request.permissionProfile,
   });
   await writePrivateFile(configPath, config, { exclusive: true });
-  return Object.freeze({ pack, catalogPath, configPath, credentialCommand: checkedCredential });
+  return Object.freeze({
+    pack,
+    catalogPath,
+    configPath,
+    configSha256: sha256(config),
+    credentialCommand: checkedCredential,
+  });
 }

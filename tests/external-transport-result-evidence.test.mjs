@@ -34,6 +34,8 @@ async function evidenceHome(t, {
   provider = 'deepseek',
   model = 'deepseek-v4-flash',
   taskSha256 = sha256('prompt'),
+  promptText = null,
+  includeEndpoint = true,
   malformed = false,
 } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'external-evidence-'));
@@ -44,10 +46,14 @@ async function evidenceHome(t, {
     { type: 'session_meta', payload: {
       id: 'thread-1',
       model_provider: provider,
-      base_url: 'https://api.deepseek.com/',
-      task_sha256: taskSha256,
+      ...(includeEndpoint ? { base_url: 'https://api.deepseek.com/' } : {}),
+      ...(taskSha256 ? { task_sha256: taskSha256 } : {}),
     } },
     { type: 'turn_context', payload: { model } },
+    ...(promptText === null ? [] : [{
+      type: 'response_item',
+      payload: { role: 'user', content: [{ type: 'input_text', text: promptText }] },
+    }]),
   ];
   await fs.writeFile(
     path.join(home, 'session.jsonl'),
@@ -63,6 +69,7 @@ const expected = {
   model: 'deepseek-v4-flash',
   endpoint: 'https://api.deepseek.com/',
   taskSha256: sha256('prompt'),
+  configSha256: sha256('trusted isolated config'),
 };
 
 test('strict child result accepts exact structured data and rejects schema abuse', () => {
@@ -90,6 +97,24 @@ test('runtime evidence attributes one exact provider/model/endpoint/task tuple',
   assert.equal(parsed.taskDelivered, true);
   assert.equal(parsed.runtimeExecuted, true);
   assert.deepEqual(parsed.attribution.providers, ['deepseek']);
+});
+
+test('real Codex session prompt plus isolated-config hash can prove delivery and endpoint configuration', async (t) => {
+  const home = await evidenceHome(t, {
+    taskSha256: null,
+    promptText: 'prompt',
+    includeEndpoint: false,
+  });
+  const parsed = await parseExternalRuntimeEvidence({
+    stdoutText: stdout,
+    codexHome: home,
+    expected,
+    stdinDelivered: true,
+  });
+  assert.equal(parsed.status, 'ATTRIBUTED');
+  assert.equal(parsed.providerResolved, true);
+  assert.equal(parsed.taskDelivered, true);
+  assert.match(parsed.attribution.endpointRef, /^runtime:config:/u);
 });
 
 test('result self-report cannot replace wrong or missing runtime attribution', async (t) => {

@@ -85,7 +85,7 @@ test('Installer dry-run describes External prerequisites without activation or c
   );
 });
 
-test('Installer apply cannot activate External execution before Phase 3', async (t) => {
+test('Installer apply cannot activate the controlled External production path', async (t) => {
   const fixture = await setup(t);
   let credentialChecked = false;
   await assert.rejects(
@@ -95,7 +95,7 @@ test('Installer apply cannot activate External execution before Phase 3', async 
       apply: true,
       keychainReadyImpl: async () => { credentialChecked = true; return true; },
     }),
-    /External Transport activation requires Phase 3/,
+    /separate controlled Flash E2E/,
   );
   assert.equal(credentialChecked, false);
   assert.equal(await fs.readFile(fixture.configPath, 'utf8'), fixture.sentinel);

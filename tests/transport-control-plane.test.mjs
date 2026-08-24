@@ -40,8 +40,8 @@ function input(overrides = {}) {
   };
 }
 
-test('Phase 2 production External descriptor is present but disabled and unreachable', () => {
-  assert.equal(EXTERNAL_CONTROL_PLANE.phase, 2);
+test('Phase 3 production External descriptor remains default-off outside the controlled runner', () => {
+  assert.equal(EXTERNAL_CONTROL_PLANE.phase, 3);
   assert.equal(EXTERNAL_CONTROL_PLANE.modulePresent, true);
   assert.equal(EXTERNAL_CONTROL_PLANE.featureEnabled, false);
   assert.equal(EXTERNAL_CONTROL_PLANE.runtimeRouteEnabled, false);
@@ -52,7 +52,7 @@ test('Phase 2 production External descriptor is present but disabled and unreach
   });
   assert.equal(eligibility.eligible, false);
   assert.equal(eligibility.runtimeVerified, true);
-  assert.match(eligibility.reason, /disabled until Phase 3/);
+  assert.match(eligibility.reason, /default-off/);
 });
 
 test('transport preference accepts the documented external alias and rejects unknown values', () => {
@@ -163,7 +163,7 @@ test('maintainer evidence is scoped to Flash and never claims local installation
   }
 });
 
-test('Installer Phase 2 plans Native configuration and blocks External apply activation', () => {
+test('Installer keeps Native configuration and blocks public External apply activation', () => {
   const compatible = evaluateHostCompatibility({ version: '0.147.0', multiAgent: true });
   const native = installerTransportPlan({
     requestedTransport: 'auto',
@@ -185,5 +185,5 @@ test('Installer Phase 2 plans Native configuration and blocks External apply act
   });
   assert.equal(external.configurationDecision, 'BLOCK');
   assert.equal(external.applyAllowed, false);
-  assert.match(external.reason, /requires Phase 3/);
+  assert.match(external.reason, /separate controlled Flash E2E/);
 });

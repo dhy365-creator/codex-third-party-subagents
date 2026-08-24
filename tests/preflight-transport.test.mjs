@@ -111,7 +111,7 @@ test('explicit External request is blocked before credentials, bridge, or child 
   assert.equal(result.decision, 'deny');
   assert.equal(result.transportDecision.decision, 'BLOCK');
   assert.equal(result.transportDecision.selectedTransport, null);
-  assert.match(result.reason, /disabled until Phase 3/);
+  assert.match(result.reason, /default-off/);
   assert.equal(credentialChecked, false);
   assert.equal(quotaRead, false);
   assert.equal(bridgeCreated, false);
@@ -132,12 +132,12 @@ test('0.149 auto policy reports both Native block and disabled External without 
   assert.equal(result.bridgePrepared, false);
   assert.equal(result.transportDecision.decision, 'BLOCK');
   assert.match(result.transportDecision.reason, /native=.*inherit provider configuration/);
-  assert.match(result.transportDecision.reason, /external=.*disabled until Phase 3/);
+  assert.match(result.transportDecision.reason, /external=.*default-off/);
   assert.equal(credentialChecked, false);
   assert.equal(bridgeCreated, false);
 });
 
-test('billable authorization cannot bypass the disabled Phase 2 production gate', async (t) => {
+test('billable authorization alone cannot bypass the default-off production gate', async (t) => {
   const { root, config } = await setup(t);
   const result = await runPreflight(request(root, {
     transportPreference: 'external-codex',

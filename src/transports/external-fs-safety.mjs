@@ -219,10 +219,49 @@ export function parentConfigurationUnchanged(before, after) {
   return JSON.stringify(before) === JSON.stringify(after);
 }
 
-export async function tightenPrivateTree(root) {
+async function allowedRuntimeSymlink(root, target, allowedExecutable) {
+  if (!path.isAbsolute(allowedExecutable ?? '')) return false;
+  const relative = path.relative(root, target);
+  const allowedName = ['applypatch', 'apply_patch', 'codex-execve-wrapper'].includes(path.basename(target));
+  const parts = relative.split(path.sep);
+  const executionRootRelative = parts[0] === 'home' && parts[1] === 'tmp' && parts[2] === 'arg0';
+  const stateRootRelative = parts[0] === 'executions'
+    && /^[A-Za-z0-9-]{12,96}$/u.test(parts[1] ?? '')
+    && parts[2] === 'home' && parts[3] === 'tmp' && parts[4] === 'arg0';
+  if (!allowedName || (!executionRootRelative && !stateRootRelative)) return false;
+  const link = await fs.readlink(target);
+  if (!path.isAbsolute(link)) return false;
+  try {
+    const [resolvedLink, resolvedAllowed] = await Promise.all([
+      fs.realpath(link),
+      fs.realpath(allowedExecutable),
+    ]);
+    const info = await fs.stat(resolvedLink);
+    const marker = `${path.sep}node_modules${path.sep}@openai${path.sep}codex${path.sep}`;
+    const packageOffset = resolvedAllowed.indexOf(marker);
+    const packageRoot = packageOffset === -1
+      ? null
+      : resolvedAllowed.slice(0, packageOffset + marker.length - 1);
+    const exactExecutable = resolvedLink === resolvedAllowed;
+    const packagedRuntime = packageRoot !== null
+      && isPathInside(packageRoot, resolvedLink)
+      && path.basename(resolvedLink) === 'codex';
+    return (exactExecutable || packagedRuntime)
+      && info.isFile() && (info.mode & 0o111) !== 0 && (info.mode & 0o022) === 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function tightenPrivateTree(root, { allowedExecutable = null } = {}) {
   async function visit(target) {
     const info = await fs.lstat(target);
-    if (info.isSymbolicLink()) throw new Error('private runtime tree contains a symlink');
+    if (info.isSymbolicLink()) {
+      if (!(await allowedRuntimeSymlink(root, target, allowedExecutable))) {
+        throw new Error('private runtime tree contains an unsafe symlink');
+      }
+      return;
+    }
     if (info.isDirectory()) {
       await fs.chmod(target, EXTERNAL_DIRECTORY_MODE);
       for (const name of await fs.readdir(target)) await visit(path.join(target, name));
@@ -234,12 +273,16 @@ export async function tightenPrivateTree(root) {
   return root;
 }
 
-export async function assertPrivateTree(root) {
+export async function assertPrivateTree(root, { allowedExecutable = null } = {}) {
   const problems = [];
   async function visit(target, relative = '.') {
     const info = await fs.lstat(target);
     const mode = info.mode & 0o777;
-    if (info.isSymbolicLink()) problems.push(`${relative}: symlink`);
+    if (info.isSymbolicLink()) {
+      if (!(await allowedRuntimeSymlink(root, target, allowedExecutable))) {
+        problems.push(`${relative}: symlink`);
+      }
+    }
     else if (info.isDirectory()) {
       if (mode !== EXTERNAL_DIRECTORY_MODE) problems.push(`${relative}: directory mode ${mode.toString(8)}`);
       for (const name of await fs.readdir(target)) await visit(path.join(target, name), path.join(relative, name));

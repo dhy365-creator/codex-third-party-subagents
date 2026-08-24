@@ -369,7 +369,7 @@ export async function runDoctor(options = {}) {
       runtimeRoot: path.join(baseEnv.codexDir, 'external-transports', RUNTIME_NAMESPACE),
       permissionProfile: options.permissionProfile ?? 'read-only',
       credentialReady,
-      externalEvidence: options.externalTransportEvidence ?? null,
+      externalEvidence: options.externalTransportEvidence,
     });
     checks.push(...externalReadinessChecks(externalReadiness));
   } else {

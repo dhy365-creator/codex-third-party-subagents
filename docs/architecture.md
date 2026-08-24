@@ -34,11 +34,12 @@ Native adapter, then a runtime-verified External adapter, otherwise blocks. It
 never silently changes provider/model, falls back to OpenAI, pins an older Host,
 or uses an explicit-only role.
 
-Phase 2 now consumes the pure validation/selection contracts in Doctor,
-Verifier, Preflight, and Installer. This is control-plane awareness only:
-the External registry remains `enabled: false` with `factory: null`, active
-routing and the bridge cannot instantiate it, and Installer `--apply` rejects
-External activation with a Phase-3-required decision. See:
+Phase 3 retains the Phase 2 control-plane boundary in Doctor, Verifier,
+Preflight, and Installer: the External registry remains `enabled: false` with
+`factory: null`, active routing and the bridge cannot instantiate it, and
+Installer `--apply` rejects External activation. A separate maintainer-only
+runner can execute one exact, feature-gated, explicitly authorized Flash E2E.
+See:
 
 - [Provider-neutral transport contract](transport-contract.md)
 - [External Codex transport architecture](external-transport.md)
@@ -46,8 +47,9 @@ External activation with a Phase-3-required decision. See:
 - [Phased implementation plan](external-transport-implementation-plan.md)
 - [ADR 001](adr/001-external-codex-transport.md)
 
-DeepSeek V4 Flash External evidence is controlled maintainer evidence for exact
-Codex CLI `0.149.0`; it is not public-installation or independent-user evidence.
+DeepSeek V4 Flash now also has strict local-installation External evidence for
+one controlled production E2E on exact Codex CLI `0.149.0`; it is not public
+installation, automatic routing, release, or independent-user evidence.
 Native `0.149.x` remains blocked, and other External provider/model tuples remain
 unknown.
 

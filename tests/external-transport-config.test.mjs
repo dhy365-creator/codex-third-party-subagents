@@ -115,6 +115,8 @@ test('production execution gate blocks child spawn even after non-billable prepa
       command: '/usr/bin/security',
       args: ['find-generic-password', '-a', 'fixture-user', '-s', 'codex-deepseek-api-key', '-w'],
     },
+    userHome: fixture.base,
+    credentialPreflightExecFileImpl: async () => ({ stdout: Buffer.from('fixture-value\n') }),
   });
   const prepared = await adapter.prepare(fixture.request(), fixture.context);
   await assert.rejects(

@@ -1,9 +1,10 @@
 # External Codex transport architecture
 
-Status: formal architecture plus local Phase 1 adapter and Phase 2 control-plane
-checkpoints. Doctor, Verifier, Preflight, and Installer now understand both
-Transport states, but the External registry remains disabled with no factory.
-No active routing or public runtime route can reach External execution.
+Status: Phase 3 controlled Flash production E2E is locally verified. Doctor,
+Verifier, Preflight, and Installer understand both Transport states, but the
+External registry remains disabled with no factory. No active routing or public
+runtime route can reach External execution; only the exact explicit maintainer
+gate can.
 
 ## Model
 
@@ -206,7 +207,7 @@ support. `Unknown` is fail-closed.
 
 | Provider / model | Transport | Runtime evidence | Text | Read | Write | Shell | Structured result | Streaming | Timeout / cancel | Explicit-only | Verified Host |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DeepSeek V4 Flash | External | **Maintainer runtime verified** | Verified | Verified | Verified | Verified | Verified | Observed; reliability not established | Local contract verified | No; provider policy still required | Codex CLI `0.149.0` exact |
+| DeepSeek V4 Flash | External | **Strict local controlled E2E verified** | Verified | Verified | Verified | Verified | Verified | Observed once; reliability not established | Local contract verified | No; provider policy and explicit gate required | Codex CLI `0.149.0` exact |
 | DeepSeek V4 Flash | Native | Historical runtime evidence | Historical | Historical | Unknown | Unknown | Unknown | Unknown | Historical boundary only | No | Codex CLI `0.147.0` exact |
 | DeepSeek V4 Pro | Native | Historical controlled read evidence | Historical | Historical | Unknown | Unknown | Unknown | Unknown | Historical boundary only | **Yes** | Codex CLI `0.147.0` exact |
 | DeepSeek V4 Pro | External | Unknown | Unknown | Unknown | Unknown | Unknown | Unknown | Unknown | Local supervisor only | **Yes** | None |
@@ -233,7 +234,7 @@ For current `0.149.x`, architecture-level status can be:
 ```text
 Native = BLOCKED
 External maintainer evidence = VERIFIED
-External local installation = UNVERIFIED until checked locally
+External local installation = VERIFIED for the exact controlled Flash E2E only
 ```
 
 ### Installer
