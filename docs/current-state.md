@@ -4,8 +4,13 @@
 
 ## DeepSeek V4 Flash `0.4.0-beta.3` 公开 Beta
 
-- 已接受的 `d492dbcf81f8840fb169ca2ca3711fe6d9a1022b` RC 已集成到专用发布分支；版本线更新为
-  `0.4.0-beta.3`，目标 tag 为 `v0.4.0-beta.3`。
+- 已接受的 `d492dbcf81f8840fb169ca2ca3711fe6d9a1022b` RC 已通过 PR #15 合并到公开仓库
+  `main`；发布提交为 `0906c624d83a41ff431aafa6962b0289cf27eba6`，轻量 tag
+  `v0.4.0-beta.3` 与 GitHub prerelease 已发布。
+- `main` 与 tag GitHub Actions 均通过。Release 资产
+  `codex-third-party-subagents-0.4.0-beta.3.tgz` 为 66 文件，SHA-256
+  `a8bdc59d56cd9bba626f688a23cf0e2e8f2f1679bfa72fc837c6023c329c81dd`；下载回读与
+  fresh install 通过。npm registry 未发布。
 - 打包干净安装 External 路径已在 macOS 与精确 Codex CLI `0.149.0` 上完成一次有边界的
   维护者 E2E，严格本地安装证据中 `providerResolved`、`taskDelivered`、`runtimeExecuted`、
   `runtimeVerified` 均为 true；challenge、Doctor/Verifier 与 fresh-process persistence 通过。
