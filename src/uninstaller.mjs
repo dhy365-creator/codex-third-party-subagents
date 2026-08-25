@@ -19,10 +19,14 @@ const RUNTIME_FILES = [
   'custom-agents.mjs',
   'environment.mjs',
   'fs-utils.mjs',
+  'host-compatibility.mjs',
   'keychain.mjs',
   'preflight-runtime.mjs',
   'provider-packs.mjs',
   'routing.mjs',
+  'transport-contract.mjs',
+  'transport-control-plane.mjs',
+  'transport-selection.mjs',
 ];
 
 function allowedPaths(env, profiles) {

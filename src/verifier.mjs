@@ -1,31 +1,54 @@
 import path from 'node:path';
 import { catalogIsSafe } from './catalog.mjs';
+import { PRODUCTION_CATALOG_CONTRACT, validateProductionCatalog } from './production-catalog-contract.mjs';
+import { readExternalFlashEvidence } from './external-evidence-store.mjs';
 import { discoverEnvironment } from './environment.mjs';
 import { fs, lstatIfExists, sha256File } from './fs-utils.mjs';
 import { keychainReady } from './keychain.mjs';
 import { extractAgentsBlock } from './templates.mjs';
-import { validateCustomAgentToml } from './custom-agents.mjs';
+import { inspectCustomAgentHost, validateCustomAgentToml } from './custom-agents.mjs';
+import {
+  evaluateHostCompatibility,
+  HOST_COMPATIBILITY_LEVELS,
+  publicHostCompatibility,
+} from './host-compatibility.mjs';
 import {
   DEFAULT_PROVIDER_ID as PACK_DEFAULT,
+  RUNTIME_NAMESPACE,
   resolveProviderPack,
 } from './provider-packs.mjs';
+import { buildTransportVerification } from './transport-verification.mjs';
 
-const RUNTIME_FILES = [
+const NATIVE_RUNTIME_FILES = [
   'bridge.mjs',
   'bridge-cli.mjs',
   'catalog.mjs',
   'custom-agents.mjs',
   'environment.mjs',
   'fs-utils.mjs',
+  'host-compatibility.mjs',
   'keychain.mjs',
   'preflight-runtime.mjs',
   'provider-packs.mjs',
   'routing.mjs',
 ];
+const PHASE_2_RUNTIME_FILES = [
+  'transport-contract.mjs',
+  'transport-control-plane.mjs',
+  'transport-selection.mjs',
+];
 
-function allowedPaths(env, profiles) {
+function phase2RuntimeRequired(env, manifest) {
+  const phase2Paths = new Set(PHASE_2_RUNTIME_FILES.map((name) => path.join(env.runtimeDir, name)));
+  return (manifest.managedFiles ?? []).some((record) => phase2Paths.has(record.path));
+}
+
+function allowedPaths(env, profiles, manifest) {
+  const runtimeFiles = phase2RuntimeRequired(env, manifest)
+    ? [...NATIVE_RUNTIME_FILES, ...PHASE_2_RUNTIME_FILES]
+    : NATIVE_RUNTIME_FILES;
   return new Set([
-    ...RUNTIME_FILES.map((name) => path.join(env.runtimeDir, name)),
+    ...runtimeFiles.map((name) => path.join(env.runtimeDir, name)),
     ...profiles.flatMap((profile) => [profile.agentPath, profile.catalogPath]),
     env.configPath,
     env.preflightPath,
@@ -83,6 +106,12 @@ function configCustomAgentsAreValid(config, profiles) {
   )));
 }
 
+function productionCatalogRequired(manifest, providerId, profile) {
+  return manifest.options?.hostCompatibility?.version === PRODUCTION_CATALOG_CONTRACT.codexVersion
+    && providerId === PRODUCTION_CATALOG_CONTRACT.providerId
+    && profile.model === PRODUCTION_CATALOG_CONTRACT.model;
+}
+
 async function readManifest(env) {
   const info = await lstatIfExists(env.manifestPath);
   if (!info) return null;
@@ -96,26 +125,125 @@ async function readManifest(env) {
   return manifest;
 }
 
+async function inspectHost(options) {
+  if (options.customAgentHost) return options.customAgentHost;
+  try {
+    return await (options.inspectCustomAgentHostImpl ?? inspectCustomAgentHost)({
+      codexPath: options.codexPath,
+      commandRunner: options.commandRunner,
+    });
+  } catch {
+    return { compatibility: evaluateHostCompatibility() };
+  }
+}
+
+function hostState(host) {
+  const compatibility = host.compatibility ?? evaluateHostCompatibility({
+    version: host.version,
+    multiAgent: host.multiAgent,
+  });
+  const blocked = compatibility.level === HOST_COMPATIBILITY_LEVELS.HOST_BLOCKED;
+  return {
+    compatibility,
+    issue: compatibility.configurationInstallAllowed
+      ? null
+      : `Host cross-provider subagent ${compatibility.status.toLowerCase()}: ${compatibility.reason}`,
+    providerResolved: blocked ? false : null,
+    taskDelivered: blocked ? false : null,
+  };
+}
+
+function withTransportVerification(result, { env, host, options, providerPack }) {
+  const pack = providerPack ?? env.providerPack;
+  const input = {
+    result,
+    providerPack: pack,
+    host,
+    codexBinary: options.codexPath ?? null,
+    externalConfigured: options.externalConfigured === true,
+    externalEvidence: options.externalTransportEvidence ?? null,
+    externalPrerequisitesReady: options.externalPrerequisitesReady === true,
+    externalBusy: options.externalBusy === true,
+  };
+  try {
+    return { ...result, ...buildTransportVerification(input) };
+  } catch {
+    const transport = buildTransportVerification({ ...input, externalEvidence: null });
+    return {
+      ...result,
+      configured: false,
+      configurationReady: false,
+      ready: false,
+      issues: [...result.issues, 'External Transport evidence failed strict validation'],
+      ...transport,
+    };
+  }
+}
+
+function incompleteResult({ env, warnings, issue, host, options }) {
+  const state = hostState(host);
+  const result = {
+    configured: false,
+    discoverable: false,
+    providerResolved: state.providerResolved,
+    taskDelivered: state.taskDelivered,
+    runtimeExecuted: false,
+    runtimeVerified: false,
+    configurationReady: false,
+    ready: false,
+    credentialReady: null,
+    hostCompatibility: publicHostCompatibility(state.compatibility),
+    issues: [issue, state.issue].filter(Boolean),
+    warnings,
+    environment: env,
+  };
+  return withTransportVerification(result, { env, host, options, providerPack: env.providerPack });
+}
+
 export async function verify(options = {}) {
   const checkedAt = (options.now instanceof Date ? options.now : new Date()).toISOString();
   let env = discoverEnvironment({ provider: options.provider ?? PACK_DEFAULT, ...options, env: options.env ?? process.env });
+  let storedExternalEvidence = options.externalTransportEvidence;
+  if (storedExternalEvidence === undefined
+    && env.providerPack?.id === 'deepseek' && env.providerPack?.model === 'deepseek-v4-flash') {
+    try {
+      storedExternalEvidence = await readExternalFlashEvidence(
+        path.join(env.codexDir, 'external-transports', RUNTIME_NAMESPACE),
+      );
+    } catch {
+      storedExternalEvidence = {};
+    }
+  }
+  const transportOptions = {
+    ...options,
+    externalTransportEvidence: storedExternalEvidence,
+    externalConfigured: options.externalConfigured ?? storedExternalEvidence != null,
+    externalPrerequisitesReady: options.externalPrerequisitesReady
+      ?? storedExternalEvidence?.runtimeVerified === true,
+  };
   const issues = [];
   const warnings = [];
+  const host = await inspectHost(transportOptions);
+  const currentHost = hostState(host);
   let manifest;
   try {
     manifest = await readManifest(env);
   } catch (error) {
-    return { configured: false, runtimeVerified: false, issues: [error.message], warnings, environment: env };
+    return incompleteResult({ env, warnings, issue: error.message, host, options: transportOptions });
   }
 
   if (!manifest) {
-    return {
-      configured: false,
-      runtimeVerified: false,
-      issues: ['install manifest is missing'],
+    return incompleteResult({
+      env,
       warnings,
-      environment: env,
-    };
+      issue: 'install manifest is missing',
+      host,
+      options: transportOptions,
+    });
+  }
+
+  if (!manifest.options?.hostCompatibility?.level) {
+    issues.push('install manifest is missing the Host compatibility contract');
   }
 
   const providerId = manifest.options?.providerId ?? env.providerPack?.id ?? PACK_DEFAULT;
@@ -145,7 +273,7 @@ export async function verify(options = {}) {
     issues.push('selected provider model profile is not installed');
   }
 
-  const allowed = allowedPaths(env, profiles);
+  const allowed = allowedPaths(env, profiles, manifest);
   const recorded = new Set();
   for (const record of manifest.managedFiles ?? []) {
     if (!allowed.has(record.path)) {
@@ -204,6 +332,14 @@ export async function verify(options = {}) {
       const catalog = JSON.parse(await fs.readFile(profile.catalogPath, 'utf8'));
       if (!catalogIsSafe(catalog, profile.providerPack.catalog)) {
         issues.push(`runtime catalog is not safe for ${profile.model}`);
+      } else if (productionCatalogRequired(manifest, providerId, profile)) {
+        validateProductionCatalog(catalog, {
+          codexVersion: PRODUCTION_CATALOG_CONTRACT.codexVersion,
+          providerId,
+          model: profile.model,
+          requiredModalities: profile.providerPack.catalog.requiredModalities,
+          outputModalities: profile.providerPack.catalog.outputModalities,
+        });
       }
     } catch {
       issues.push(`runtime catalog is missing or invalid for ${profile.model}`);
@@ -230,6 +366,9 @@ export async function verify(options = {}) {
     }
     if (!configCustomAgentsAreValid(config, profiles)) {
       issues.push('runtime config custom-agent identities are invalid');
+    }
+    if (!config.hostCompatibility?.level) {
+      issues.push('runtime config Host compatibility contract is missing');
     }
     const expectedDefaultRole = providerId === 'deepseek'
       ? profiles.find((profile) => profile.profile === 'flash')?.role ?? null
@@ -265,15 +404,29 @@ export async function verify(options = {}) {
     warnings.push('Keychain credential check was skipped');
   }
   warnings.push('No live Codex subagent task was run; runtime remains unverified');
+  if (currentHost.issue) warnings.push(currentHost.issue);
   const selectedAgentEvidence = agentEvidence.find((evidence) => (
     evidence.providerRole === providerPack?.role && evidence.model === providerPack?.model
   )) ?? null;
 
-  return {
-    configured: issues.length === 0,
+  const configured = issues.length === 0;
+  const discoverable = profiles.length > 0
+    && agentEvidence.every((evidence) => evidence.configured)
+    && host.multiAgent === true;
+  const configurationReady = configured
+    && currentHost.compatibility.configurationInstallAllowed === true;
+  const result = {
+    configured,
+    discoverable,
+    providerResolved: currentHost.providerResolved,
+    taskDelivered: currentHost.taskDelivered,
+    runtimeExecuted: false,
     runtimeVerified: false,
+    configurationReady,
+    ready: configurationReady && credentialReady === true,
     credentialReady,
-    issues,
+    hostCompatibility: publicHostCompatibility(currentHost.compatibility),
+    issues: [...issues, currentHost.issue].filter(Boolean),
     warnings,
     environment: env,
     manifest,
@@ -297,7 +450,17 @@ export async function verify(options = {}) {
     runtimeEvidence: selectedAgentEvidence ? {
       ...selectedAgentEvidence,
       evidenceSource: 'local Custom Agent configuration validation',
+      discoverable,
+      providerResolved: currentHost.providerResolved,
+      taskDelivered: currentHost.taskDelivered,
+      runtimeExecuted: false,
       runtimeVerified: false,
     } : null,
   };
+  return withTransportVerification(result, {
+    env,
+    host,
+    options: transportOptions,
+    providerPack: providerPack ?? env.providerPack,
+  });
 }

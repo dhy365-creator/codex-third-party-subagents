@@ -1,4 +1,5 @@
 import { createInterface } from 'node:readline/promises';
+import path from 'node:path';
 import { stdin as input, stdout as output } from 'node:process';
 import { install } from './installer.mjs';
 import { uninstall } from './uninstaller.mjs';
@@ -9,17 +10,20 @@ const VALUE_FLAGS = new Set([
   'plan',
   'provider',
   'model',
+  'transport',
   'spark-available',
   'luna-available',
   'threshold',
   'catalog-source',
   'setup-script-url',
+  'home-dir',
 ]);
 const BOOLEAN_FLAGS = new Set([
   'apply',
   'confirm-main-preserved',
   'consent-data',
   'migrate-legacy',
+  'external-flash-beta',
   'skip-keychain-check',
   'help',
 ]);
@@ -39,6 +43,9 @@ export function parseArgs(argv) {
     if (!value || value.startsWith('--')) throw new Error(`--${name} requires a value`);
     result[name] = value;
     index += 1;
+  }
+  if (result['home-dir'] && !path.isAbsolute(result['home-dir'])) {
+    throw new Error('--home-dir requires an absolute path');
   }
   return result;
 }
@@ -82,6 +89,7 @@ async function askInstallOptions(parsed, streams = { input, output }) {
       apply: parsed.apply === true,
       provider,
       model,
+      transport: parsed.transport ?? 'auto',
       plan,
       sparkAvailable,
       lunaAvailable,
@@ -89,8 +97,10 @@ async function askInstallOptions(parsed, streams = { input, output }) {
       confirmMainPreserved: confirmMainPreserved === true,
       consentData: consentData === true,
       migrateLegacy: parsed['migrate-legacy'] === true,
+      externalFlashBeta: parsed['external-flash-beta'] === true,
       catalogSource: parsed['catalog-source'] ?? 'auto',
       setupScriptUrl: parsed['setup-script-url'],
+      homeDir: parsed['home-dir'],
     };
   } finally {
     rl?.close();
@@ -102,6 +112,7 @@ function installHelp() {
     `Dry-run is the default. Add --apply to write files.\n\n` +
     `  --provider <provider-pack-id>\n` +
     `  --model <profile-or-model-id>\n` +
+    `  --transport <auto|native|external>\n` +
     `  --plan <plus|pro>\n` +
     `  --spark-available <true|false>\n` +
     `  --luna-available <true|false>\n` +
@@ -109,13 +120,15 @@ function installHelp() {
     `  --confirm-main-preserved\n` +
    `  --consent-data\n` +
     `  --migrate-legacy (adopt a matching existing Custom Agent with a backup)\n` +
+   `  --external-flash-beta (install exact Flash configuration only; execution stays default-off)\n` +
    `  --catalog-source <auto|local-path>\n` +
     `  --setup-script-url <official-provider-url>\n` +
+    `  --home-dir <absolute-user-home>\n` +
     `  --apply\n`;
 }
 
 function uninstallHelp() {
-  return 'Usage: node scripts/uninstall.mjs [--provider <provider-pack-id>] [--apply]\nDry-run is the default. Uninstall removes every installed profile for that provider; Keychain credentials and bridge archives are never removed.\n';
+  return 'Usage: node scripts/uninstall.mjs [--provider <provider-pack-id>] [--home-dir <absolute-user-home>] [--apply]\nDry-run is the default. Uninstall removes every installed profile for that provider; Keychain credentials and bridge archives are never removed.\n';
 }
 
 function summarizeInstall(result) {
@@ -127,9 +140,11 @@ function summarizeInstall(result) {
     catalogAcquired: result.catalogAcquired,
     keychainVerified: result.keychainVerified,
     customAgents: result.customAgents,
+    hostCompatibility: result.customAgents?.host?.compatibility ?? null,
     migration: result.migration,
     profile: result.profile,
     profiles: result.profiles,
+    transportPlan: result.transportPlan,
     message: result.message,
   };
 }
@@ -137,15 +152,30 @@ function summarizeInstall(result) {
 export function summarizeVerify(result) {
   const summary = {
     configured: result.configured,
+    discoverable: result.discoverable,
+    providerResolved: result.providerResolved,
+    taskDelivered: result.taskDelivered,
+    runtimeExecuted: result.runtimeExecuted,
     runtimeVerified: result.runtimeVerified,
+    configurationReady: result.configurationReady,
+    ready: result.ready,
     credentialReady: result.credentialReady,
+    hostCompatibility: result.hostCompatibility,
+    transport: result.transport,
+    providerId: result.providerId,
+    model: result.model,
+    evidenceSource: result.evidenceSource,
+    hostVersion: result.hostVersion,
+    codexBinary: result.codexBinary,
+    verifiedAt: result.verifiedAt,
+    transports: result.transports,
     profile: result.profile,
     agentEvidence: result.agentEvidence,
     runtimeEvidence: result.runtimeEvidence,
     issues: result.issues,
     warnings: result.warnings,
   };
-  if (result.configured === true && result.credentialReady === true) {
+  if (result.ready === true && result.credentialReady === true) {
     summary.POST_INSTALL_STATUS = 'SUCCESS';
   }
   return summary;
@@ -177,9 +207,10 @@ export function verifyCli(argv = process.argv.slice(2)) {
       checkKeychain: parsed['skip-keychain-check'] !== true,
       provider: parsed.provider,
       model: parsed.model,
+      homeDir: parsed['home-dir'],
     });
     process.stdout.write(`${JSON.stringify(summarizeVerify(result), null, 2)}\n`);
-    if (!result.configured) process.exitCode = 1;
+    if (!result.ready) process.exitCode = 1;
   });
 }
 
@@ -191,6 +222,7 @@ export function uninstallCli(argv = process.argv.slice(2)) {
       apply: parsed.apply === true,
       provider: parsed.provider,
       model: parsed.model,
+      homeDir: parsed['home-dir'],
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     if (result.conflicts.length) process.exitCode = 1;

@@ -15,11 +15,13 @@ import {
   extractCatalogDocument,
   reduceCatalogForProvider,
 } from './catalog.mjs';
+import { PRODUCTION_CATALOG_CONTRACT, validateProductionCatalog } from './production-catalog-contract.mjs';
 import { keychainReady } from './keychain.mjs';
 import {
   inspectCustomAgentDefinitions,
   inspectCustomAgentHost,
 } from './custom-agents.mjs';
+import { publicHostCompatibility } from './host-compatibility.mjs';
 import {
   listProviderPackProfiles,
   resolveProviderPack,
@@ -42,6 +44,10 @@ import {
   replaceAgentsBlock,
   workerConfig,
 } from './templates.mjs';
+import {
+  installerTransportPlan,
+  normalizeTransportPreference,
+} from './transport-control-plane.mjs';
 
 const INSTALL_VERSION = '0.4.0-beta.2';
 const SOURCE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -52,10 +58,14 @@ const RUNTIME_FILES = [
   'custom-agents.mjs',
   'environment.mjs',
   'fs-utils.mjs',
+  'host-compatibility.mjs',
   'keychain.mjs',
   'preflight-runtime.mjs',
   'provider-packs.mjs',
   'routing.mjs',
+  'transport-contract.mjs',
+  'transport-control-plane.mjs',
+  'transport-selection.mjs',
 ];
 
 function stamp() {
@@ -91,6 +101,7 @@ function normalizeOptions(options) {
     sparkAvailable,
     lunaAvailable,
     migrateLegacy: options.migrateLegacy === true,
+    transport: normalizeTransportPreference(options.transport),
   };
 }
 
@@ -187,6 +198,7 @@ function customAgentSummary(host, definitions, expected, migration) {
       multiAgent: host.multiAgent,
       multiAgentV2: host.multiAgentV2,
       reason: host.reason,
+      compatibility: publicHostCompatibility(host.compatibility),
     },
     expected: expected.map((definition) => ({
       name: definition.name,
@@ -317,6 +329,18 @@ export async function install(options = {}) {
     codexPath: normalized.codexPath,
     commandRunner: normalized.commandRunner,
   });
+  const transportPlan = installerTransportPlan({
+    requestedTransport: normalized.transport,
+    compatibility: customAgentHost.compatibility,
+    providerId: providerPack.id,
+    providerRole: providerPack.role,
+    model: providerPack.model,
+    externalFlashBeta: normalized.externalFlashBeta,
+  });
+  if (!dryRun && transportPlan.requestedTransport === 'external-codex'
+    && transportPlan.applyAllowed !== true) {
+    throw new Error(transportPlan.reason);
+  }
   const customAgentDefinitionsState = await (
     normalized.inspectCustomAgentDefinitionsImpl ?? inspectCustomAgentDefinitions
   )({
@@ -333,8 +357,9 @@ export async function install(options = {}) {
   });
   const customAgentConflict = migration.conflicts.length > 0
     || customAgentDefinitionsState.issues.length > 0;
-  if (!dryRun && customAgentHost.supported !== true) {
-    throw new Error('Codex Custom Agents are not confirmed available; update or enable multi-agent before --apply');
+  if (!dryRun && customAgentHost.compatibility?.configurationInstallAllowed !== true
+    && transportPlan.externalFlashBetaConfiguration !== true) {
+    throw new Error(`Host cross-provider subagent installation is blocked: ${customAgentHost.reason}`);
   }
   if (!dryRun && customAgentConflict) {
     throw new Error('custom-agent identity conflict detected; resolve duplicates before --apply');
@@ -374,6 +399,15 @@ export async function install(options = {}) {
     profile.profile,
     reduceCatalogForProvider(acquired.catalog, profile.catalog),
   ]));
+  if (transportPlan.externalFlashBetaConfiguration === true) {
+    catalogs.set(providerPack.profile, validateProductionCatalog(acquired.catalog, {
+      codexVersion: PRODUCTION_CATALOG_CONTRACT.codexVersion,
+      providerId: providerPack.id,
+      model: providerPack.model,
+      requiredModalities: providerPack.catalog.requiredModalities,
+      outputModalities: providerPack.catalog.outputModalities,
+    }));
+  }
 
   if (!dryRun) {
     const check = normalized.keychainReadyImpl ?? keychainReady;
@@ -433,6 +467,7 @@ export async function install(options = {}) {
     })),
     defaultProviderRole,
     customAgents: expectedCustomAgents,
+    hostCompatibility: publicHostCompatibility(customAgentHost.compatibility),
     providerCapabilities: Array.from(providerPack.capabilities.supported.values()),
   };
 
@@ -514,6 +549,7 @@ export async function install(options = {}) {
         model: profile.model,
       })),
       customAgents: expectedCustomAgents,
+      hostCompatibility: publicHostCompatibility(customAgentHost.compatibility),
       legacyMigration: migration.applied ? migration.candidates : [],
     },
     options: {
@@ -531,6 +567,7 @@ export async function install(options = {}) {
       })),
       defaultProviderRole,
       customAgents: expectedCustomAgents,
+      hostCompatibility: publicHostCompatibility(customAgentHost.compatibility),
       legacyMigration: migration.applied ? migration.candidates : [],
       mainModelPreserved: true,
       delegatedDataConsent: true,
@@ -571,6 +608,7 @@ export async function install(options = {}) {
       providerRole: profile.role,
       model: profile.model,
     })),
+    transportPlan,
     message: dryRun ? 'dry-run: no files or keychain entries were changed' : 'installation applied',
   };
 }

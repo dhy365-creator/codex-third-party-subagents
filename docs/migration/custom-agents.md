@@ -13,10 +13,10 @@ Current Codex custom-agent documentation defines the Host identity in a TOML
 definition: the `name` field is authoritative, while the filename is the
 normal discovery convention. The supported scopes are user
 `~/.codex/agents/*.toml` and project `.codex/agents/*.toml`. See the official
-[Subagents documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents)
-and [configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference).
+[Subagents documentation](https://developers.openai.com/codex/subagents)
+and [configuration reference](https://developers.openai.com/codex/config-reference).
 
-## Host audit — 2026-08-16
+## Historical Host audit — 2026-08-16
 
 - Local Codex CLI: `0.147.0`.
 - `multi_agent` reports enabled; `multi_agent_v2` reports disabled.
@@ -25,10 +25,20 @@ and [configuration reference](https://learn.chatgpt.com/docs/config-file/config-
   the new `deepseek_pro_worker` definition. A fresh Host session discovered and
   ran both identities, confirming that agent inventory changes require reload.
 
-Conclusion: the architecture is **Mode A — native Custom Agent definitions**.
+Historical conclusion for exact `0.147.0`: the architecture was **Mode A —
+native Custom Agent definitions**.
 The project writes valid Host definitions and treats the policy router as a
 separate defense-in-depth layer. It never claims that a router allowlist itself
 registers an agent.
+
+## Current Host contract — 2026-08-23
+
+Codex CLI `0.149.0` narrows agent-role application to bounded overrides. Model,
+reasoning effort, developer instructions, and reductions are supported, while
+role-level provider/catalog/endpoint/auth values are ignored and inherited from
+the parent. The current OpenAI Main -> third-party Provider child topology is
+therefore Level C Host Blocked even when `multi_agent=true`. See the
+[version matrix and fail-closed contract](../host-compatibility.md).
 
 ## Identity and routing contract
 
@@ -40,8 +50,9 @@ registers an agent.
 | `qwen_worker` | Alibaba Model Studio | `qwen3.7-max` | Pack-selected |
 
 Each generated TOML requires `name`, `description`, and
-`developer_instructions`, pins its model/provider tuple, and uses command-backed
-macOS Keychain auth. Unsupported legacy handoff keys such as `complete` and
+`developer_instructions`, declares its model/provider tuple, and uses command-backed
+macOS Keychain auth. A compatible Host is required for that provider tuple to
+take effect. Unsupported legacy handoff keys such as `complete` and
 `fail` are rejected by local validation rather than emitted into the TOML.
 
 The bridge carries the configured tuple so the worker can refuse a mismatched
@@ -65,7 +76,7 @@ writing files or calling a paid provider API.
 
 `--apply` is blocked when:
 
-- the Custom Agent Host capability is not confirmed;
+- the exact Host is Level C Host Blocked or Level D Unknown;
 - an expected identity is invalid, duplicated, mismatched, or shadowed by a
   project-scoped definition;
 - a matching existing user definition has not been explicitly adopted.
@@ -89,28 +100,31 @@ inventory already loaded by the Host.
 
 ## Doctor and verify
 
-`npm run doctor` is read-only. It checks the Codex version/capability state,
-`multi_agent`/`multi_agent_v2`, expected definition identity, missing or
+`npm run doctor` is read-only. It separately checks native multi-agent state and
+the cross-provider Host contract, plus expected definition identity, missing or
 duplicated names, project-scope conflicts, legacy-migration state, install
 state, and ordinary provider prerequisites. It performs no write, no paid API
 call, and never reads a Keychain secret value.
 
-`verify` returns per-agent local configuration evidence containing provider,
-agent name, model, and a check timestamp. It keeps
+`verify` reports local configuration, discovery, provider resolution, task
+delivery, execution, and runtime verification as separate fields. Its per-agent
+local evidence contains provider, agent name, model, and a timestamp. It keeps
 `hostRuntimeMetadata: null` and `runtimeVerified: false` because it does not
 ingest or independently accept external runtime records. Flash evidence never
 verifies Pro, and Pro evidence never verifies Flash.
 
 ## Runtime evidence boundary
 
-Fresh Host sessions completed the same read-only coding fixture through
+On exact Codex CLI `0.147.0`, fresh Host sessions completed the same read-only
+coding fixture through
 `deepseek_worker -> deepseek-v4-flash` and
 `deepseek_pro_worker -> deepseek-v4-pro`. Each child reproduced the failing
 tests, identified the exact one-line fix, used tools, completed and released its
 owner-only bridge, and was independently reviewed by the main thread. Sanitized
 session metadata recorded the expected provider/model tuple for each run.
 
-This is controlled maintainer Level 3 evidence for those named paths. It does
+This is **historical** controlled maintainer Level 3 evidence for those named
+paths. It does
 not supply provider-dashboard attribution, public-installer validation in an
 unrelated environment, broad task reliability, or independent user acceptance;
 it does not change `runtimeVerified: false`. Pro remains explicit-only, with no

@@ -3,15 +3,19 @@ import os from 'node:os';
 import path from 'node:path';
 import { discoverEnvironment, DEFAULT_PROVIDER_ID } from './environment.mjs';
 import { keychainReady } from './keychain.mjs';
-import { resolveProviderPack } from './provider-packs.mjs';
+import { resolveProviderPack, RUNTIME_NAMESPACE } from './provider-packs.mjs';
 import {
   inspectCustomAgentDefinitions,
   inspectCustomAgentHost,
 } from './custom-agents.mjs';
 import { verify } from './verifier.mjs';
+import {
+  externalReadinessChecks,
+  inspectExternalTransportReadiness,
+} from './transport-readiness.mjs';
 
 const STATUS = Object.freeze({ PASS: 'PASS', WARN: 'WARN', BLOCKED: 'BLOCKED' });
-const VALUE_FLAGS = new Set(['provider', 'model']);
+const VALUE_FLAGS = new Set(['provider', 'model', 'home-dir']);
 const CODEX_APP_CANDIDATES = Object.freeze([
   '/Applications/Codex.app',
   '/Applications/ChatGPT.app',
@@ -110,6 +114,9 @@ export function parseDoctorArgs(argv = process.argv.slice(2)) {
     parsed[name] = value;
     index += 1;
   }
+  if (parsed['home-dir'] && !path.isAbsolute(parsed['home-dir'])) {
+    throw new Error('--home-dir requires an absolute path');
+  }
   return parsed;
 }
 
@@ -193,30 +200,58 @@ export async function runDoctor(options = {}) {
     });
     add(
       checks,
-      'Custom Agent host',
-      customAgentHost.supported === true
+      'Multi-agent availability',
+      customAgentHost.multiAgent === true
         ? STATUS.PASS
-        : customAgentHost.supported === false ? STATUS.BLOCKED : STATUS.WARN,
-      customAgentHost.supported === true
+        : customAgentHost.multiAgent === false ? STATUS.BLOCKED : STATUS.WARN,
+      customAgentHost.multiAgent === true
         ? `Codex ${customAgentHost.version ?? 'CLI'} reports multi_agent enabled`
-        : customAgentHost.reason,
+        : customAgentHost.multiAgent === false
+          ? `Codex ${customAgentHost.version ?? 'CLI'} reports multi_agent disabled`
+          : 'Codex multi_agent availability could not be established',
+    );
+    const compatibility = customAgentHost.compatibility;
+    add(
+      checks,
+      'Host cross-provider subagent',
+      compatibility?.configurationInstallAllowed === true
+        ? STATUS.PASS
+        : compatibility ? STATUS.BLOCKED : STATUS.WARN,
+      compatibility?.reason ?? 'cross-provider Host compatibility could not be established',
     );
     add(
       checks,
       'Multi-agent configuration',
-      customAgentHost.supported !== true
+      customAgentHost.multiAgent !== true
         ? STATUS.WARN
         : customAgentHost.multiAgentV2 === true ? STATUS.WARN : STATUS.PASS,
-      customAgentHost.supported !== true
+      customAgentHost.multiAgent !== true
         ? 'cannot establish the active multi-agent configuration'
         : customAgentHost.multiAgentV2 === true
           ? 'multi_agent_v2 is also enabled; validate Host precedence before live dispatch'
           : 'multi_agent is active; multi_agent_v2 is not required and was not changed',
     );
   } catch {
-    add(checks, 'Custom Agent host', STATUS.WARN, 'Custom Agent capability could not be inspected');
+    add(checks, 'Multi-agent availability', STATUS.WARN, 'multi-agent capability could not be inspected');
+    add(checks, 'Host cross-provider subagent', STATUS.BLOCKED,
+      'cross-provider Host compatibility is unknown; active installation is blocked');
     add(checks, 'Multi-agent configuration', STATUS.WARN, 'cannot establish the active multi-agent configuration');
   }
+  const nativeTransport = Object.freeze({
+    transport: 'native',
+    eligible: customAgentHost?.compatibility?.automaticRoutingAllowed === true,
+    runtimeVerified: customAgentHost?.compatibility?.automaticRoutingAllowed === true,
+    compatibilityLevel: customAgentHost?.compatibility?.level ?? 'LEVEL_D_UNKNOWN',
+    hostVersion: customAgentHost?.version ?? null,
+    reason: customAgentHost?.compatibility?.reason
+      ?? 'Native cross-provider Host compatibility is unknown',
+  });
+  add(
+    checks,
+    'Native Transport eligibility',
+    nativeTransport.eligible ? STATUS.PASS : STATUS.BLOCKED,
+    nativeTransport.reason,
+  );
 
   if (providerPack) {
     try {
@@ -307,6 +342,7 @@ export async function runDoctor(options = {}) {
       ? 'luna_worker definition detected'
       : 'luna_worker was not detected; confirm Spark or Luna availability before install');
 
+  let credentialReady = null;
   if (providerPack && platform === 'darwin') {
     try {
       const present = await (options.keychainReadyImpl ?? keychainReady)({
@@ -316,13 +352,32 @@ export async function runDoctor(options = {}) {
         env: options.env ?? process.env,
         execFileImpl: options.execFileImpl,
       });
+      credentialReady = present;
       add(checks, 'Keychain credential', present ? STATUS.PASS : STATUS.BLOCKED,
         `provider credential is ${present ? 'present' : 'missing'}`);
     } catch {
+      credentialReady = false;
       add(checks, 'Keychain credential', STATUS.BLOCKED, 'provider credential is missing');
     }
   } else {
     add(checks, 'Keychain credential', STATUS.WARN, 'credential check is unavailable');
+  }
+
+  let externalReadiness = null;
+  if (providerPack) {
+    externalReadiness = await inspectExternalTransportReadiness({
+      providerPack,
+      customAgentHost,
+      codexDetected,
+      runtimeRoot: path.join(baseEnv.codexDir, 'external-transports', RUNTIME_NAMESPACE),
+      permissionProfile: options.permissionProfile ?? 'read-only',
+      credentialReady,
+      externalEvidence: options.externalTransportEvidence,
+    });
+    checks.push(...externalReadinessChecks(externalReadiness));
+  } else {
+    add(checks, 'External Transport eligibility', STATUS.BLOCKED,
+      'provider/model/role tuple is unavailable');
   }
 
   if (installState.installed && providerPack && installedProvider === providerId) {
@@ -334,9 +389,16 @@ export async function runDoctor(options = {}) {
         env: options.env ?? process.env,
         platform,
         homeDir,
+        customAgentHost,
       });
-      add(checks, 'Verify prerequisites', result.configured ? STATUS.PASS : STATUS.BLOCKED,
-        result.configured ? 'local configuration checks are clean' : `${result.issues.length} local configuration issue(s) found`);
+      const ready = result.configurationReady ?? (
+        result.configured === true
+        && customAgentHost?.compatibility?.configurationInstallAllowed === true
+      );
+      add(checks, 'Verify prerequisites', ready ? STATUS.PASS : STATUS.BLOCKED,
+        ready
+          ? 'local configuration and Host compatibility checks are clean'
+          : `${result.issues.length} local configuration issue(s) or Host compatibility blocker(s) found`);
     } catch {
       add(checks, 'Verify prerequisites', STATUS.BLOCKED, 'local configuration checks could not complete');
     }
@@ -357,6 +419,7 @@ export async function runDoctor(options = {}) {
     profile: providerPack?.profile ?? null,
     installed: installState.installed,
     customAgentHost,
+    transports: Object.freeze({ native: nativeTransport, external: externalReadiness }),
     checks,
   };
 }
@@ -374,14 +437,14 @@ export function formatDoctorSummary(report) {
 }
 
 export function doctorHelp() {
-  return 'Usage: npm run doctor -- [--provider <deepseek|minimax|qwen>] [--model <model>]\n';
+  return 'Usage: npm run doctor -- [--provider <deepseek|minimax|qwen>] [--model <model>] [--home-dir <absolute-user-home>]\n';
 }
 
 export async function doctorCli(argv = process.argv.slice(2)) {
   try {
     const parsed = parseDoctorArgs(argv);
     if (parsed.help) return process.stdout.write(doctorHelp());
-    const report = await runDoctor(parsed);
+    const report = await runDoctor({ ...parsed, homeDir: parsed['home-dir'] });
     process.stdout.write(`${formatDoctorSummary(report)}\n`);
     if (report.summary.BLOCKED) process.exitCode = 1;
   } catch {
