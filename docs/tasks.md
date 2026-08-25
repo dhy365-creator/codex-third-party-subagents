@@ -2,8 +2,9 @@
 
 ## 当前发布
 
-- [x] 2026-08-25 将已接受的 Flash Beta RC 集成到专用发布分支，更新 `0.4.0-beta.3`
-  公开 Beta 文档与版本；发布门禁、GitHub main/tag/Release 的最终状态以本次发布任务证据为准。
+- [x] 2026-08-25 将已接受的 Flash Beta RC 通过 PR #15 合并到 `main`，发布
+  `v0.4.0-beta.3` tag 与 GitHub prerelease；`main`/tag CI、66 文件资产 SHA-256 回读和
+  fresh install 均通过，npm registry 未发布。
 - [ ] 取得 DeepSeek V4 Flash 独立真实用户验收；公开 Beta 与维护者 clean-install E2E 不自动
   扩写为广义用户验收、自动路由或官方背书。
 

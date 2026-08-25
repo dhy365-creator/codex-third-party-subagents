@@ -5,13 +5,13 @@ mode: resume
 current_stage: discussions
 status: PUBLISHED
 repository: dhy365-creator/codex-third-party-subagents
-source_commit: 59100b08aeedfa299398d1330c25f863bf4aa8af
-release_tag: v0.4.0-beta.2
-release_url: https://github.com/dhy365-creator/codex-third-party-subagents/releases/tag/v0.4.0-beta.2
-owned_repository_pr: https://github.com/dhy365-creator/codex-third-party-subagents/pull/5
+source_commit: 0906c624d83a41ff431aafa6962b0289cf27eba6
+release_tag: v0.4.0-beta.3
+release_url: https://github.com/dhy365-creator/codex-third-party-subagents/releases/tag/v0.4.0-beta.3
+owned_repository_pr: https://github.com/dhy365-creator/codex-third-party-subagents/pull/15
 owned_repository_state: merged
-last_updated: 2026-08-15
-checked_at: 2026-08-15T10:37:16+08:00
+last_updated: 2026-08-25
+checked_at: 2026-08-25T14:10:00+08:00
 external_publication: published
 waiting_for: none
 discussion_url: https://github.com/openai/codex/discussions/38119
@@ -38,7 +38,7 @@ layer, or a promise of a fixed cost reduction.
 
 | Item | Status | Evidence / next action |
 | --- | --- | --- |
-| Baseline | DONE | `origin/main` and the clean audit worktree matched at `59100b0`; unrelated catalog safety changes remain isolated in the canonical checkout |
+| Baseline | DONE | Accepted RC `d492dbc` was integrated by PR #15; release source and tag resolve to `0906c62` |
 | Public repository | DONE | Public GitHub repository with MIT license |
 | README positioning | DONE | English and Chinese first screens productized with value, quick start, demo, compatibility, architecture, validation, and security |
 | Visual assets | DONE | Reproducible SVG and rendered PNG assets in `assets/` |
@@ -46,8 +46,8 @@ layer, or a promise of a fixed cost reduction.
 | Topics | DONE | Expanded after PR #5 merged; current set recorded below |
 | Homepage | NOT APPLICABLE | No canonical project website; keep empty instead of pointing to an unrelated page |
 | Social Preview | NEEDS USER ACTION | `assets/hero-social-preview.png` is ready; GitHub Settings upload must be performed and visually verified in the UI |
-| GitHub Actions | DONE | Public `main` and tag workflows passed on release source `59100b0` |
-| Release | DONE | `v0.4.0-beta.2` is a public pre-release targeting `59100b0` |
+| GitHub Actions | DONE | Public `main` and `v0.4.0-beta.3` tag workflows passed on release source `0906c62` |
+| Release | DONE | `v0.4.0-beta.3` is a public pre-release with a verified 66-file package asset targeting `0906c62` |
 | Profile pin | DONE | Repository is already pinned on the owner's profile |
 | Repository Discussions | NOT APPLICABLE | Repository Discussions are disabled and are not required for this promotion pass |
 | External promotion | DONE | Show and tell Discussion #38119 is published; it was live-checked open and unlocked on 2026-08-15 |
