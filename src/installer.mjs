@@ -49,7 +49,7 @@ import {
   normalizeTransportPreference,
 } from './transport-control-plane.mjs';
 
-const INSTALL_VERSION = '0.4.0-beta.2';
+const INSTALL_VERSION = '0.4.0-beta.3';
 const SOURCE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const RUNTIME_FILES = [
   'bridge.mjs',

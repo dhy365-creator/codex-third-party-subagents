@@ -78,7 +78,8 @@ Codex 订阅、配额和其自身计费边界仍然成立。
 
 当前 Pack / Profile 与证据状态是：
 
-- DeepSeek V4 Flash：已内置并通过隔离测试；一次受控维护者 E2E 已达到 Level 3，但通用用户验收仍待完成。
+- DeepSeek V4 Flash：打包干净安装 External 公开 Beta；已在 macOS + 精确 Codex CLI
+  `0.149.0` 上完成一次有边界的维护者 E2E 并取得严格本地运行时证据，独立用户验收仍待完成。
 - DeepSeek V4 Pro：仅显式选择的 Custom Agent 配置 Profile，已有直接 API 与受控维护者
   Level 3 E2E 证据；公开安装器与独立真实用户验收仍待完成。
 - MiniMax-M3：已内置；已记录 API、CLI 与 Desktop Worker 运行时验证。

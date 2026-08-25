@@ -1,6 +1,6 @@
 {
   "name": "codex-third-party-subagents",
-  "version": "0.4.0-beta.2",
+  "version": "0.4.0-beta.3",
   "description": "Version-scoped compatibility, installation, and verification for bounded third-party model handoffs in Codex.",
   "private": true,
   "license": "MIT",

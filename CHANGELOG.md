@@ -6,6 +6,22 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0-beta.3] - 2026-08-25
+
+- Publish the DeepSeek V4 Flash packaged clean-install External Transport Beta
+  for macOS and exact Codex CLI `0.149.0`.
+- Add the version-scoped production catalog contract and enforce validation
+  before permits, ledgers, slots, or child launch.
+- Preserve command-backed macOS Keychain authentication while isolating
+  `CODEX_HOME`, and validate the exact child credential context without logging
+  credential material.
+- Record one bounded packaged-artifact maintainer E2E with strict
+  installation-scoped `providerResolved`, `taskDelivered`, `runtimeExecuted`,
+  and `runtimeVerified` evidence, plus restart and Doctor/Verifier persistence.
+- Keep External explicit and default-off, Provider API billing separate, V4 Pro
+  explicit-only, and MiniMax/Qwen support claims unchanged. Independent-user
+  acceptance remains pending.
+
 - Add a version-scoped, fail-closed Host compatibility contract. Exact Codex
   `0.147.0` DeepSeek Flash/Pro evidence is labelled historical; the Codex
   `0.149.x` line, including the current Desktop prerelease, is blocked because

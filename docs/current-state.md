@@ -1,8 +1,20 @@
 # 当前状态
 
-最后更新：2026-08-24
+最后更新：2026-08-25
 
-## Flash production catalog contract 与离线 release hardening（本地已验证）
+## DeepSeek V4 Flash `0.4.0-beta.3` 公开 Beta
+
+- 已接受的 `d492dbcf81f8840fb169ca2ca3711fe6d9a1022b` RC 已集成到专用发布分支；版本线更新为
+  `0.4.0-beta.3`，目标 tag 为 `v0.4.0-beta.3`。
+- 打包干净安装 External 路径已在 macOS 与精确 Codex CLI `0.149.0` 上完成一次有边界的
+  维护者 E2E，严格本地安装证据中 `providerResolved`、`taskDelivered`、`runtimeExecuted`、
+  `runtimeVerified` 均为 true；challenge、Doctor/Verifier 与 fresh-process persistence 通过。
+- External 仍需显式启用并保持 default-off；Provider API 单独计费，Keychain 认证保持
+  command-backed，Codex 仍是主代理。V4 Pro 继续 explicit-only，MiniMax/Qwen 边界不变。
+- 这是公开 Beta 与维护者验证证据，不等于广义独立用户验收，也不代表 OpenAI 或 Provider
+  官方背书。npm/package registry 发布没有既有历史，继续仅使用 GitHub Release 分发。
+
+## Flash production catalog contract 与离线 release hardening（历史本地证据）
 
 - 已修复 clean-install 将 minimal unit-test catalog 提升为 production `model_catalog_json`
   的缺陷。新增精确 Codex CLI `0.149.0` / DeepSeek V4 Flash production catalog contract，
@@ -19,9 +31,9 @@
   Codex Security diff scan 均通过；Security scan 覆盖 13 个 changed production surfaces，
   `0` findings。历史 maintainer ledger 仍为 `3/3`，失败 clean fixture ledger 仍为 `1/3`，
   本任务 Provider request 为 `0`，Keychain 仅检查存在性且未修改/暴露。
-- 以上仅是 local/offline engineering evidence；clean fixture `runtimeVerified=false`，External
-  public route 仍 default-off。`BETA_READINESS = NOT_READY_FOR_FLASH_BETA_RC`，仍需未来单独授权的
-  installed-artifact Provider-backed Flash E2E 与 ChatGPT review/用户验收。
+- 本节记录 Provider-backed E2E 之前的历史离线状态；后续独立 Handoff 已完成唯一一次授权的
+  installed-artifact Flash E2E，并由 ChatGPT 接受为 Beta RC。External 普通路由仍 default-off，
+  独立用户验收仍未完成。
 
 ## Flash beta clean-install release readiness（历史 PARTIAL）
 
@@ -172,7 +184,7 @@
 
 ## 已写入本地仓库
 
-- 当前源码版本线为 `0.4.0-beta.2`，MIT，Node.js `>=20`，macOS-only；PR、CI、tag 与
+- 当前源码版本线为 `0.4.0-beta.3`，MIT，Node.js `>=20`，macOS-only；PR、CI、tag 与
   Release 的实时状态以 GitHub 公开控制面为准。
 - 公开仓库：`https://github.com/dhy365-creator/codex-third-party-subagents`。
 - 仓库入口提供英文 `README.md` 与简体中文 `README.zh-CN.md`，顶部可相互切换。

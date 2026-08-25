@@ -30,7 +30,7 @@
 
 | Provider / 模型 | 接入类型 | 当前结论 | 下一步 |
 | --- | --- | --- | --- |
-| DeepSeek / `deepseek-v4-flash` | 官方 Responses | **内置 Pack；受控维护者 E2E 已达到 Level 3** | 保持回归测试；在扩大声明前取得独立用户验收 |
+| DeepSeek / `deepseek-v4-flash` | 官方 Responses | **公开 Beta；macOS + 精确 Codex CLI `0.149.0` 的打包干净安装 External 维护者 E2E 已验证** | 保持 External 显式且默认关闭；扩大声明前取得独立用户验收 |
 | DeepSeek / `deepseek-v4-pro` | 官方 Responses | **仅显式选择的 Profile；受控维护者 E2E 已达到 Level 3**：已记录可归因的 Host Provider/Model session、工具使用、桥接释放与主线程复核 | 保持关闭 Flash/Pro 自动路由；扩大声明前取得独立用户验收 |
 | MiniMax / `MiniMax-M3` | 官方 Responses；官方给出 Codex Desktop 配置 | **运行时已验证 Pack：API、Codex CLI、Desktop 子代理和桥接释放均通过** | 保持回归测试；公开安装器 apply/verify 单独验收 |
 | 阶跃星辰 / `step-3.7-flash` | 官方 `/v1/responses` | **A 级候选，优先级 2** | 验证流式工具循环和 Codex 子代理运行 |
@@ -45,9 +45,16 @@
 
 这里的 “A 级” 仍然只是**值得提供 API key 测试**，不是已经完美支持。DeepSeek V4
 Flash、MiniMax-M3 与 Qwen3.7-Max 已内置。V4 Pro 有独立的、仅显式选择的 Custom Agent
-配置 Profile，绝不自动路由。Flash 与 Pro 的受控维护者 E2E 均有记录，但独立用户验收、
-广义公开安装器和广义路由声明仍待完成；按上述严格口径，目前没有任何 Provider 可以直接
-标成“完美支持”。
+配置 Profile，绝不自动路由。Flash 已具备打包干净安装 External 公开 Beta，并在精确测试
+边界取得严格本地安装证据。独立用户验收和广义路由声明仍待完成；Pro 保持既有受控维护者
+证据边界。按上述严格口径，目前没有任何 Provider 可以直接标成“完美支持”。
+
+## DeepSeek V4 Flash 干净安装 External Beta — 2026-08-24
+
+打包 artifact 路径已在 macOS 与精确 Codex CLI `0.149.0` 上完成一次有边界的维护者 E2E。
+严格 installation-scoped evidence 中 `providerResolved`、`taskDelivered`、`runtimeExecuted`、
+`runtimeVerified` 均为 true；fresh-process Doctor/Verifier 复核未增加 Provider 请求。
+External 仍需显式启用且默认关闭，Provider API 单独计费，尚未声称独立用户验收。
 
 ## DeepSeek V4 Flash 受控 E2E — 2026-08-16
 

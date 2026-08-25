@@ -82,7 +82,7 @@ export function readRateLimitsFromAppServer({ env = process.env, timeoutMs = 700
     child.stdin.write(`${JSON.stringify({
       method: 'initialize',
       id: 1,
-      params: { clientInfo: { name: FALLBACK_AGENT, version: '0.4.0-beta.2' } },
+      params: { clientInfo: { name: FALLBACK_AGENT, version: '0.4.0-beta.3' } },
     })}\n`);
     child.stdin.write(`${JSON.stringify({ method: 'account/rateLimits/read', id: 2 })}\n`);
   });

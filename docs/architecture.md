@@ -47,9 +47,10 @@ See:
 - [Phased implementation plan](external-transport-implementation-plan.md)
 - [ADR 001](adr/001-external-codex-transport.md)
 
-DeepSeek V4 Flash now also has strict local-installation External evidence for
-one controlled production E2E on exact Codex CLI `0.149.0`; it is not public
-installation, automatic routing, release, or independent-user evidence.
+DeepSeek V4 Flash now has a packaged clean-install External Public Beta backed
+by strict local-installation evidence from one controlled production E2E on
+exact Codex CLI `0.149.0`. It is not automatic routing or independent-user
+evidence.
 Native `0.149.x` remains blocked, and other External provider/model tuples remain
 unknown.
 

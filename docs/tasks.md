@@ -1,12 +1,19 @@
 # 任务清单
 
+## 当前发布
+
+- [x] 2026-08-25 将已接受的 Flash Beta RC 集成到专用发布分支，更新 `0.4.0-beta.3`
+  公开 Beta 文档与版本；发布门禁、GitHub main/tag/Release 的最终状态以本次发布任务证据为准。
+- [ ] 取得 DeepSeek V4 Flash 独立真实用户验收；公开 Beta 与维护者 clean-install E2E 不自动
+  扩写为广义用户验收、自动路由或官方背书。
+
 ## 部分完成 / 阻塞
 
 - [x] 2026-08-24 Flash production catalog contract + offline hardening：精确 `0.149.0`
   production contract、pre-permit/pre-ledger/pre-child ordering、真实 Codex guaranteed-offline
   `thread.started`、artifact clean install、restart、uninstall/reinstall、迁移回归、完整测试与
   Security scan 已本地通过；Provider request `0`，历史账本保持 `3/3` 和 `1/3`。这是 local
-  checkpoint，不代表 Beta RC ready；仍需未来单独授权的 installed-artifact live Flash E2E。
+  checkpoint；后续独立 Handoff 已完成 installed-artifact live Flash E2E 并通过 Beta RC review。
 - [x] 2026-08-24 Flash beta clean-install release readiness（历史 PARTIAL）：可发布 tarball、隔离安装、
   apply 幂等、negative gates、`212/212` 测试和 `0` security findings 已完成；唯一获授权的
   clean-artifact DeepSeek Flash 请求失败且不得重试，历史账本已达 `3/3`。下一任务需在不发

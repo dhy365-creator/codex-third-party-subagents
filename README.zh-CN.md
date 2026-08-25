@@ -11,7 +11,7 @@
 
 ![Codex Third-Party Subagents 架构主视觉](assets/hero-social-preview.png)
 
-> 当前版本线为 `0.4.0-beta.2`。本项目非官方、仅支持 macOS，未经 OpenAI、DeepSeek、
+> 当前版本线为 `0.4.0-beta.3`。本项目非官方、仅支持 macOS，未经 OpenAI、DeepSeek、
 > MiniMax 或阿里云官方背书。
 
 ## Codex 始终是主代理
@@ -53,7 +53,7 @@ Doctor、dry-run-first Installer、Verifier、owner-only 单任务 Bridge、迁�
 
 | 内置 Provider Pack | 当前证据 |
 | --- | --- |
-| DeepSeek V4 Flash | 已内置；精确 Host `0.147.0` 的**历史**受控维护者 E2E 已通过；通用用户验收仍待完成 |
+| DeepSeek V4 Flash | **公开 Beta**；macOS + 精确 Codex CLI `0.149.0` 的打包干净安装 External 路径已通过一次有边界的维护者 E2E；独立用户验收仍待完成 |
 | MiniMax-M3 | API、CLI 与 Codex Desktop 运行时已验证 |
 | 阿里云百炼 Qwen3.7-Max | API、CLI 与 Codex Desktop 运行时已验证 |
 
@@ -114,7 +114,7 @@ node scripts/install.mjs \
 如果 Host 为 Blocked 或 Unknown，应停在 Doctor/dry-run；`--apply` 会在 active Provider
 安装前 fail closed。
 
-精确 DeepSeek Flash Beta 候选为 Codex CLI `0.149.0` 提供独立的 package artifact
+DeepSeek Flash 公开 Beta 为 Codex CLI `0.149.0` 提供独立的 package artifact
 安装路径。它必须同时使用 `--transport external` 与 `--external-flash-beta`；该选项只安装
 配置，普通 External 路由仍保持 default-off。完整步骤见
 [Flash Beta 干净安装指南](docs/flash-beta-clean-install.md)。这不提升 V4 Pro、MiniMax 或
@@ -142,10 +142,10 @@ Qwen External 支持状态。
 ![真实 Codex Desktop Provider Worker 脱敏运行记录](assets/terminal-demo.png)
 
 MiniMax-M3 和 Qwen3.7-Max 已通过真实 API、CLI 与 Codex Desktop 检查。
-DeepSeek V4 Flash 与仅显式选择的 V4 Pro Profile 均曾在精确 Host `0.147.0` 完成一次
-有边界的历史维护者代码 fixture E2E：Custom Subagent 复现失败测试、指出准确的一行修复、
-使用预期 Provider/Model、完成并释放桥接，最后由主线程复核。这是这些受控路径的 Level 3 证据，
-不是通用公开安装器或用户验收声明；验证器仍刻意输出 `runtimeVerified: false`。
+DeepSeek V4 Flash 现已提供打包干净安装 External 公开 Beta：在 macOS 与精确 Codex CLI
+`0.149.0` 上完成一次有边界的维护者 E2E，并取得 `providerResolved`、`taskDelivered`、
+`runtimeExecuted`、`runtimeVerified` 全为 true 的严格本地安装证据。External 仍需显式启用且
+默认关闭，这不代表广义独立用户验收。仅显式选择的 V4 Pro 仍保持既有历史证据边界。
 
 ## 兼容性速览
 
@@ -153,7 +153,7 @@ DeepSeek V4 Flash 与仅显式选择的 V4 Pro Profile 均曾在精确 Host `0.1
 
 | 厂商直连路径 | 当前证据 |
 | --- | --- |
-| DeepSeek V4 Flash | 已内置；精确 Host `0.147.0` 的历史受控 E2E 已通过；验证器保持保守状态 |
+| DeepSeek V4 Flash | 公开 Beta；macOS + 精确 Codex CLI `0.149.0` 的打包干净安装 External 维护者 E2E 已验证；默认关闭；独立用户验收待完成 |
 | DeepSeek V4 Pro | 仅显式选择的 Custom Agent Profile；精确 Host `0.147.0` 的历史受控 E2E 已通过；绝不自动路由 |
 | MiniMax-M3 | 已内置，Desktop 运行时已验证 |
 | 阿里云百炼 Qwen3.7-Max | 已内置，Desktop 运行时已验证 |
@@ -381,10 +381,10 @@ npm test
 Keychain、Codex 额度、`~/.codex` 或外部网络。
 
 本项目提供的是可扩展 Provider Pack 核心，并不代表所有第三方模型已经可以直接使用。
-DeepSeek V4 Flash、MiniMax-M3 与 Qwen3.7-Max 均已内置并通过隔离测试；Flash 与仅显式
-选择的 V4 Pro Profile 均已有受控维护者代码 fixture E2E 的 Level 3 证据，MiniMax-M3 与
-Qwen3.7-Max 还通过了真实 Codex Desktop 子代理冒烟测试。通用用户验收和公开安装器声明
-仍单独记录。
+DeepSeek V4 Flash、MiniMax-M3 与 Qwen3.7-Max 均已内置并通过隔离测试；Flash 已提供
+打包干净安装 External 公开 Beta，并取得一次有边界的维护者 E2E 严格证据；仅显式选择的
+V4 Pro Profile 保持既有 Level 3 边界。MiniMax-M3 与 Qwen3.7-Max 还通过了真实 Codex
+Desktop 子代理冒烟测试。独立用户验收仍单独记录。
 新增 Provider 需要以经过代码审查的方式修改
 `src/provider-packs.mjs` 并补充测试；安装器不会加载任意远程 Pack manifest。
 

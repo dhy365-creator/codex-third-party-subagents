@@ -17,6 +17,9 @@ Focus: documentation and operational maturity before adding new runtime claims.
 
 - **current** — keep Codex as the main agent and provider handoff bounded.
 - **current** — maintain read-only Doctor and the dry-run-first installer.
+- **current** — DeepSeek V4 Flash packaged clean-install External Public Beta,
+  verified by one bounded maintainer E2E on macOS with exact Codex CLI
+  `0.149.0`; the route remains explicit and default-off.
 - **planned** — stabilize onboarding, provider diagnostics, documentation, and
   contributor guidance from real user feedback.
 - **planned** — keep provider evidence aligned across current state,

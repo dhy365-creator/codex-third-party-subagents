@@ -114,7 +114,7 @@ test('Doctor is wired as a read-only command and version metadata is aligned', a
     'https://github.com/dhy365-creator/codex-third-party-subagents.git',
   );
   assert.equal(packageMetadata.scripts.doctor, 'node scripts/doctor.mjs');
-  assert.equal(packageMetadata.version, '0.4.0-beta.2');
+  assert.equal(packageMetadata.version, '0.4.0-beta.3');
   assert.equal(packageMetadata.bin['codex-third-party-subagents-install'], 'scripts/install.mjs');
   assert.deepEqual(packageMetadata.files.slice(0, 2), ['src/', 'scripts/']);
 
@@ -123,7 +123,7 @@ test('Doctor is wired as a read-only command and version metadata is aligned', a
   assert.doesNotMatch(doctor, /\b(?:fetch|https?\.request)\s*\(/);
 
   for (const file of ['src/installer.mjs', 'src/fs-utils.mjs', 'src/preflight-runtime.mjs']) {
-    assert.match(await fs.readFile(path.join(root, file), 'utf8'), /0\.4\.0-beta\.2/);
+    assert.match(await fs.readFile(path.join(root, file), 'utf8'), /0\.4\.0-beta\.3/);
   }
 });
 

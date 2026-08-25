@@ -80,8 +80,9 @@ pack files, helper artifacts, manifest/backups, and one bounded AGENTS block.
 
 Current packs/profiles and evidence are:
 
-- DeepSeek V4 Flash: built-in and isolated-tested; a controlled maintainer E2E
-  reached Level 3, while generic user acceptance remains pending.
+- DeepSeek V4 Flash: packaged clean-install External Public Beta; one bounded
+  maintainer E2E on macOS with exact Codex CLI `0.149.0` produced strict local
+  runtime evidence, while independent-user acceptance remains pending.
 - DeepSeek V4 Pro: an explicit-only Custom Agent profile with direct API and
   controlled maintainer Level 3 E2E evidence; public-installer and independent
   user acceptance remain pending.

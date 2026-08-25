@@ -11,7 +11,7 @@ target user home must be absolute; `--home-dir` isolates all managed Codex files
 without changing the real macOS account used by Keychain.
 
 ```sh
-npm install /absolute/path/codex-third-party-subagents-0.4.0-beta.2.tgz
+npm install /absolute/path/codex-third-party-subagents-0.4.0-beta.3.tgz
 
 ./node_modules/.bin/codex-third-party-subagents-doctor \
   --provider deepseek --model flash --home-dir /absolute/fixture-user

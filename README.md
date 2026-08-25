@@ -12,7 +12,7 @@ review**.
 
 ![Codex Third-Party Subagents architecture](assets/hero-social-preview.png)
 
-> Version line `0.4.0-beta.2`. Unofficial, macOS-only, and not endorsed by
+> Version line `0.4.0-beta.3`. Unofficial, macOS-only, and not endorsed by
 > OpenAI, DeepSeek, MiniMax, or Alibaba Cloud.
 
 ## Codex stays the main agent
@@ -63,7 +63,7 @@ evidence.
 
 | Built-in provider pack | Current evidence |
 | --- | --- |
-| DeepSeek V4 Flash | Built-in; **historical** controlled maintainer E2E passed on exact Host `0.147.0`; generic user acceptance pending |
+| DeepSeek V4 Flash | **Public Beta**; packaged clean-install External path passed a bounded maintainer E2E on macOS with exact Codex CLI `0.149.0`; independent-user acceptance is still pending |
 | MiniMax-M3 | API, CLI, and Codex Desktop runtime verified |
 | Alibaba Model Studio Qwen3.7-Max | API, CLI, and Codex Desktop runtime verified |
 
@@ -128,7 +128,7 @@ Desktop after applying, and run `npm run verify -- --provider deepseek`.
 On a blocked or unknown Host, stop at Doctor/dry-run: `--apply` intentionally
 fails closed before an active provider installation.
 
-The exact DeepSeek Flash Beta candidate has a separate package-artifact path for
+The DeepSeek Flash Public Beta has a separate package-artifact path for
 Codex CLI `0.149.0`. It requires `--transport external` together with
 `--external-flash-beta`; this installs configuration only and leaves ordinary
 External routing default-off. See the
@@ -161,13 +161,12 @@ is included.
 ![Sanitized verified Codex Desktop provider worker transcript](assets/terminal-demo.png)
 
 MiniMax-M3 and Qwen3.7-Max have passed real API, CLI, and Codex Desktop checks.
-DeepSeek V4 Flash and the explicit-only V4 Pro profile each passed a historical,
-bounded maintainer coding-fixture E2E on exact Host `0.147.0`: the selected Custom
-Subagent reproduced the failing tests, identified the exact one-line fix, used
-the expected provider/model, completed and released the bridge, and was reviewed
-by the main thread. This is Level 3 evidence for those controlled paths, not a
-general public-installer or user-acceptance claim; the verifier deliberately
-continues to report `runtimeVerified: false`.
+DeepSeek V4 Flash now also has a packaged clean-install External Public Beta:
+one bounded maintainer E2E on macOS with exact Codex CLI `0.149.0` produced
+strict local-installation evidence with `providerResolved`, `taskDelivered`,
+`runtimeExecuted`, and `runtimeVerified` all true. External remains explicit
+and default-off, and this is not broad independent-user acceptance. The
+explicit-only V4 Pro evidence remains at its prior historical boundary.
 
 ## Compatibility at a glance
 
@@ -175,7 +174,7 @@ continues to report `runtimeVerified: false`.
 
 | Direct provider path | Current evidence |
 | --- | --- |
-| DeepSeek V4 Flash | Built-in; historical controlled E2E passed on exact Host `0.147.0`; verifier remains conservative |
+| DeepSeek V4 Flash | Public Beta; packaged clean-install External maintainer E2E verified on macOS with exact Codex CLI `0.149.0`; default-off; independent-user acceptance pending |
 | DeepSeek V4 Pro | Explicit-only Custom Agent profile; historical controlled E2E passed on exact Host `0.147.0`; never auto-routed |
 | MiniMax-M3 | Built-in; Desktop runtime verified |
 | Alibaba Model Studio Qwen3.7-Max | Built-in; Desktop runtime verified |
@@ -432,10 +431,11 @@ implementations. They do not access real API keys, Keychain, Codex quota,
 
 This release provides an extensible provider-pack core, not a claim that every
 third-party model already works. DeepSeek V4 Flash, MiniMax-M3, and Qwen3.7-Max
-are built-in, isolated-tested packs. Flash and the explicit-only V4 Pro profile
-have Level 3 evidence for bounded maintainer coding-fixture E2Es; MiniMax-M3 and
-Qwen3.7-Max have recorded real Codex Desktop subagent smoke tests. Generic user
-acceptance and public-installer claims remain separately tracked.
+are built-in, isolated-tested packs. Flash has a packaged clean-install
+External Public Beta with strict evidence from one bounded maintainer E2E;
+the explicit-only V4 Pro profile retains its prior Level 3 boundary. MiniMax-M3
+and Qwen3.7-Max have recorded real Codex Desktop subagent smoke tests.
+Independent-user acceptance remains separately tracked.
 New providers are added as reviewed code in `src/provider-packs.mjs` with tests;
 the installer does not load arbitrary remote pack manifests.
 
