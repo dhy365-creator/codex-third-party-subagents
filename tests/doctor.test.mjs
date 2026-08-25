@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runDoctor, parseDoctorArgs, formatDoctorSummary } from '../src/doctor.mjs';
+import { evaluateHostCompatibility } from '../src/host-compatibility.mjs';
 import { install } from '../src/installer.mjs';
 
 const fixtureCatalog = path.join(
@@ -13,13 +14,15 @@ const fixtureCatalog = path.join(
   'catalog.json',
 );
 
-function customAgentHost() {
+function customAgentHost(version = '0.147.0') {
+  const compatibility = evaluateHostCompatibility({ version, multiAgent: true });
   return {
-    supported: true,
-    version: '0.147.0',
+    supported: compatibility.configurationInstallAllowed,
+    version,
     multiAgent: true,
     multiAgentV2: false,
-    reason: 'Codex reports multi_agent enabled',
+    compatibility,
+    reason: compatibility.reason,
   };
 }
 
@@ -57,11 +60,15 @@ test('parseDoctorArgs supports supported doctor flags', () => {
     'deepseek',
     '--model',
     'deepseek-v4-flash',
+    '--home-dir',
+    '/tmp/fixture-home',
     '--help',
   ]);
   assert.equal(parsed.provider, 'deepseek');
   assert.equal(parsed.model, 'deepseek-v4-flash');
   assert.equal(parsed.help, true);
+  assert.equal(parsed['home-dir'], '/tmp/fixture-home');
+  assert.throws(() => parseDoctorArgs(['--home-dir', 'relative']), /absolute path/);
 });
 
 test('doctor is blocked outside macOS', async () => {
@@ -126,6 +133,7 @@ test('doctor validates installed worker with no errors when prerequisites are me
     uid: options.uid,
     username: options.username,
     keychainReadyImpl: async () => true,
+    inspectCustomAgentHostImpl: async () => customAgentHost(),
   });
   assert.equal(result.installed, true);
   assert.equal(result.status !== 'BLOCKED', true);
@@ -169,6 +177,35 @@ test('doctor does not expose private verifier issue paths', async (t) => {
   const output = formatDoctorSummary(result);
   assert.equal(output.includes(homeDir), false);
   assert.match(output, /1 local configuration issue/);
+});
+
+test('doctor blocks 0.149 cross-provider use even when multi_agent is enabled', async (t) => {
+  const homeDir = await setupHome(t);
+  const result = await runDoctor({
+    homeDir,
+    platform: 'darwin',
+    provider: 'deepseek',
+    keychainReadyImpl: async () => true,
+    inspectCustomAgentHostImpl: async () => customAgentHost('0.149.0'),
+  });
+  assert.equal(result.checks.find((check) => check.name === 'Multi-agent availability')?.status, 'PASS');
+  const hostCheck = result.checks.find((check) => check.name === 'Host cross-provider subagent');
+  assert.equal(hostCheck?.status, 'BLOCKED');
+  assert.match(hostCheck?.detail ?? '', /inherit provider configuration/);
+});
+
+test('doctor blocks an unknown Host when capability inspection fails', async (t) => {
+  const homeDir = await setupHome(t);
+  const result = await runDoctor({
+    homeDir,
+    platform: 'darwin',
+    provider: 'deepseek',
+    keychainReadyImpl: async () => true,
+    inspectCustomAgentHostImpl: async () => { throw new Error('unavailable'); },
+  });
+  const hostCheck = result.checks.find((check) => check.name === 'Host cross-provider subagent');
+  assert.equal(hostCheck?.status, 'BLOCKED');
+  assert.match(hostCheck?.detail ?? '', /unknown/);
 });
 
 test('doctor blocks when model does not match selected provider', async (t) => {

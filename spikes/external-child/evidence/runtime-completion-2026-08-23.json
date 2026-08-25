@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-08-23",
+  "decision": "EXTERNAL CHILD RUNTIME VERIFIED",
+  "evidenceBoundary": "Sanitized controlled-maintainer fixture evidence; not public-installer or independent-user acceptance.",
+  "runtime": {
+    "codexBinary": "/opt/homebrew/bin/codex",
+    "codexVersion": "0.149.0",
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash",
+    "endpoint": "https://api.deepseek.com/responses",
+    "normalProbes": [
+      "bounded-read",
+      "bounded-coding"
+    ],
+    "automaticHttpRetries": 0,
+    "automaticStreamRetries": 0
+  },
+  "balanceGate": {
+    "requestReachedProvider": true,
+    "previous402Resolved": true,
+    "providerResponse": "Both bounded runtime probes completed successfully; no balance or account data retained."
+  },
+  "transientRetry": {
+    "used": true,
+    "reason": "The first read attempt successfully used the file-read command, then the next provider stream disconnected before completion.",
+    "classification": "PROVIDER FAILURE",
+    "detail": "Transient provider transport stream disconnect",
+    "pid": 3833,
+    "durationMs": 23948,
+    "exitCode": 1,
+    "timedOut": false,
+    "forcedKill": false,
+    "orphanDetected": false,
+    "fixtureWrites": [],
+    "activeSlotReleased": true
+  },
+  "readProbe": {
+    "threadId": "01a02f19-b5fa-7311-9b39-b6a711e3fe74",
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash",
+    "taskDelivered": true,
+    "taskEnvelopeSha256": "cb4015dc3b1caaa6988ebaeda510c068239221e3ca2ce517c639fb1a262159c9",
+    "cwd": "$SCRATCH/workspace/fixture",
+    "sandbox": "read-only",
+    "tools": [
+      "command_execution: pwd, list fixture, read src/math.js, read test/math.test.js"
+    ],
+    "finding": "average([]) computes 0 / 0 and returns NaN instead of 0.",
+    "changedFiles": [],
+    "structuredResultValid": true,
+    "resultSha256": "d3c1ce11b634e2f501523f73fe6e58b9d25320539cb7e0a0df551a340a473a6d",
+    "pid": 4013,
+    "startedAt": "2026-08-23T14:50:09.145Z",
+    "endedAt": "2026-08-23T14:50:19.705Z",
+    "durationMs": 10560,
+    "exitCode": 0,
+    "timedOut": false,
+    "forcedKill": false,
+    "orphanDetected": false,
+    "archiveStatus": "completed"
+  },
+  "codingProbe": {
+    "threadId": "01a02f19-df63-70d3-9c83-a46e48715108",
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash",
+    "taskDelivered": true,
+    "taskEnvelopeSha256": "7e66595247adbed8d890970696d9072374300d5193be34161ca2a0b7837dbbd0",
+    "cwd": "$SCRATCH/workspace/fixture",
+    "sandbox": "workspace-write",
+    "networkAccess": false,
+    "tools": [
+      "command_execution: read src/math.js and run the initially failing node --test",
+      "file_change: update src/math.js",
+      "command_execution: rerun node --test"
+    ],
+    "changedFiles": [
+      "src/math.js"
+    ],
+    "change": "Add an early return of 0 when values.length is 0.",
+    "childTests": {
+      "command": "node --test",
+      "pass": 2,
+      "fail": 0
+    },
+    "structuredResultValid": true,
+    "resultSha256": "ea68ba7bf9c61fea56ffdbb45ed85cad7e47aa084face9e6f17cd353562663a8",
+    "finalFixtureHashes": {
+      "package.json": "a434cdf0d255bd15c7e7a0a4039289d96c22909db2351adeb6faf298c4821056",
+      "src/math.js": "adad85d19ae9ab7e9176d525382ea6813905c3e37f9ea6e5f5c30521c0ff63b8",
+      "test/math.test.js": "1a48e8d2aabaa4c6ad2400dfa1cb80a8d27982fbdb68b38673099b1513b9879a"
+    },
+    "pid": 4047,
+    "startedAt": "2026-08-23T14:50:19.739Z",
+    "endedAt": "2026-08-23T14:50:37.743Z",
+    "durationMs": 18004,
+    "exitCode": 0,
+    "timedOut": false,
+    "forcedKill": false,
+    "orphanDetected": false,
+    "archiveStatus": "completed"
+  },
+  "solAcceptance": {
+    "fixtureDiffVerified": true,
+    "changedFileScopeVerified": true,
+    "independentFixtureTests": {
+      "pass": 2,
+      "fail": 0
+    },
+    "resultEnvelopesVerified": true,
+    "providerAttributionVerified": true,
+    "noOpenAiFallback": true,
+    "activeSlotsReleased": true,
+    "orphanProcesses": 0,
+    "accepted": true
+  },
+  "safety": {
+    "keychainExistence": "PASS",
+    "plaintextKeyInArgv": "NONE",
+    "plaintextKeyInEnvironment": "NONE",
+    "plaintextKeyInConfig": "NONE",
+    "credentialLeakInLogsResultsOrArchives": "NONE",
+    "parentConfigurationUnchanged": true,
+    "privatePermissions": true
+  }
+}

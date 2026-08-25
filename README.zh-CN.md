@@ -6,12 +6,12 @@
 
 [English](README.md) | **简体中文**
 
-把适合的 Codex 子代理任务委派给成本较低的 Provider API，同时让 **Codex 始终保持
-主代理**。
+面向 Codex 第三方模型有界交接的版本化兼容、安装与验证层，**最终复核仍由 Codex
+负责**。
 
 ![Codex Third-Party Subagents 架构主视觉](assets/hero-social-preview.png)
 
-> 当前版本线为 `0.4.0-beta.2`。本项目非官方、仅支持 macOS，未经 OpenAI、DeepSeek、
+> 当前版本线为 `0.4.0-beta.3`。本项目非官方、仅支持 macOS，未经 OpenAI、DeepSeek、
 > MiniMax 或阿里云官方背书。
 
 ## Codex 始终是主代理
@@ -21,11 +21,39 @@
 - 预检会先检查额度、任务适配性、凭据状态和仅所有者可访问的单任务桥接。
 - Codex 仍负责复核、整合和最终验收；Provider 不可用时安全回到可用的 OpenAI Worker。
 
+## Host 兼容性
+
+本项目要求的拓扑是 OpenAI Codex 主代理 -> 第三方 Provider 子代理。只有精确 Host
+契约允许子角色选择自己的 Provider 时才兼容；仅有 `multi_agent=true` 不能证明这一点。
+
+- Codex CLI `0.147.0`：已记录的 DeepSeek Flash 与显式 Pro 路径为
+  **HISTORICAL RUNTIME VERIFIED（历史运行时已验证）**；这不是当前版本声明，也不建议降级。
+- Codex CLI `0.149.x`（包括 `0.149.0`）与当前 Desktop bundled
+  `0.149.0-alpha.4.1`：**HOST BLOCKED**。`0.149` 的有界 role contract 会继承父线程
+  Provider 配置。
+- `0.148.x` 和其他未经验证版本：**UNKNOWN**，默认 fail closed。
+
+Doctor 与 dry-run 始终可用。Blocked 或 Unknown Host 不允许应用 active cross-provider
+安装、创建 Provider bridge、路由到第三方子代理或报告运行时成功。完整等级、字段契约和
+版本矩阵见 [Host compatibility](docs/host-compatibility.md)。
+
+### Codex 原生提供什么
+
+Codex 负责 Custom Agent 发现、子代理 spawn/follow-up 编排、受支持的 OpenAI per-agent
+模型和指令覆盖，以及父级 Custom Provider/认证原语。本项目不把这些原生能力写成自己的
+注册或编排能力。
+
+### 本项目增加什么
+
+经过审查的 Provider packs、command-backed Keychain 认证、版本化 Host gate、只读
+Doctor、dry-run-first Installer、Verifier、owner-only 单任务 Bridge、迁移安全、fallback
+边界和有范围的 E2E 证据。
+
 ## 当前 Provider 状态
 
 | 内置 Provider Pack | 当前证据 |
 | --- | --- |
-| DeepSeek V4 Flash | 已内置；受控维护者 E2E 已通过（Level 3）；通用用户验收仍待完成 |
+| DeepSeek V4 Flash | **公开 Beta**；macOS + 精确 Codex CLI `0.149.0` 的打包干净安装 External 路径已通过一次有边界的维护者 E2E；独立用户验收仍待完成 |
 | MiniMax-M3 | API、CLI 与 Codex Desktop 运行时已验证 |
 | 阿里云百炼 Qwen3.7-Max | API、CLI 与 Codex Desktop 运行时已验证 |
 
@@ -33,7 +61,8 @@
 见[兼容性矩阵](docs/provider-compatibility.zh-CN.md)。
 
 DeepSeek V4 Pro 是仅能显式选择的 Custom Agent 配置 Profile（`--model pro`），不是
-自动 fallback。带 Host/provider/model 归因的受控维护者代码 fixture E2E 已通过；公开
+自动 fallback。精确 Host `0.147.0` 上带 Host/provider/model 归因的历史受控维护者代码
+fixture E2E 已通过；公开
 安装器与独立真实用户验收仍未完成。见
 [Custom Agents 迁移说明](docs/migration/custom-agents.md)和
 [脱敏 Custom Subagents 运行记录](docs/validation/deepseek-custom-subagents-runtime-e2e-2026-08-16.md)。
@@ -43,6 +72,7 @@ DeepSeek V4 Pro 是仅能显式选择的 Custom Agent 配置 Profile（`--model 
 - [快速开始](#快速开始)
 - [Doctor](#doctor)
 - [架构说明](docs/architecture.md)
+- [Host 兼容性](docs/host-compatibility.md)
 - [Custom Agents 迁移说明](docs/migration/custom-agents.md)
 - [兼容性矩阵](docs/provider-compatibility.zh-CN.md)
 - [DeepSeek 受控运行时 E2E](docs/validation/deepseek-runtime-e2e-2026-08-16.md)
@@ -81,6 +111,14 @@ node scripts/install.mjs \
 安装器默认仍是 dry-run，只有显式追加 `--apply` 才会写入。先检查计划，再阅读
 [完整安装步骤](#环境要求)；应用后重启 Codex Desktop，并运行
 `npm run verify -- --provider deepseek`。
+如果 Host 为 Blocked 或 Unknown，应停在 Doctor/dry-run；`--apply` 会在 active Provider
+安装前 fail closed。
+
+DeepSeek Flash 公开 Beta 为 Codex CLI `0.149.0` 提供独立的 package artifact
+安装路径。它必须同时使用 `--transport external` 与 `--external-flash-beta`；该选项只安装
+配置，普通 External 路由仍保持 default-off。完整步骤见
+[Flash Beta 干净安装指南](docs/flash-beta-clean-install.md)。这不提升 V4 Pro、MiniMax 或
+Qwen External 支持状态。
 
 不要在 issue、日志或截图中放入 API key、凭据、私密任务正文、私有文件路径或敏感数据。
 
@@ -94,7 +132,7 @@ node scripts/install.mjs \
 - 只读，不会变更文件。
 - 不调用付费 API，不输出凭据。
 - 在开始真实委派前检查环境、Provider/Model、凭据、fallback 提示和安装前置条件。
-- 检查 Custom Agent capability、身份、重复项与迁移状态。
+- 分开检查原生 multi-agent 可用性与 cross-provider Host 兼容性，以及身份、重复项与迁移状态。
 
 ## 已验证的 Codex Desktop 运行记录
 
@@ -104,10 +142,10 @@ node scripts/install.mjs \
 ![真实 Codex Desktop Provider Worker 脱敏运行记录](assets/terminal-demo.png)
 
 MiniMax-M3 和 Qwen3.7-Max 已通过真实 API、CLI 与 Codex Desktop 检查。
-DeepSeek V4 Flash 与仅显式选择的 V4 Pro Profile 均已在新 Host session 完成一次有边界
-的维护者代码 fixture E2E：Custom Subagent 复现失败测试、指出准确的一行修复、使用预期
-Provider/Model、完成并释放桥接，最后由主线程复核。这是这些受控路径的 Level 3 证据，
-不是通用公开安装器或用户验收声明；验证器仍刻意输出 `runtimeVerified: false`。
+DeepSeek V4 Flash 现已提供打包干净安装 External 公开 Beta：在 macOS 与精确 Codex CLI
+`0.149.0` 上完成一次有边界的维护者 E2E，并取得 `providerResolved`、`taskDelivered`、
+`runtimeExecuted`、`runtimeVerified` 全为 true 的严格本地安装证据。External 仍需显式启用且
+默认关闭，这不代表广义独立用户验收。仅显式选择的 V4 Pro 仍保持既有历史证据边界。
 
 ## 兼容性速览
 
@@ -115,8 +153,8 @@ Provider/Model、完成并释放桥接，最后由主线程复核。这是这些
 
 | 厂商直连路径 | 当前证据 |
 | --- | --- |
-| DeepSeek V4 Flash | 已内置；受控维护者 E2E 已通过（Level 3）；验证器保持保守状态 |
-| DeepSeek V4 Pro | 仅显式选择的 Custom Agent Profile；受控维护者 E2E 已通过（Level 3）；绝不自动路由 |
+| DeepSeek V4 Flash | 公开 Beta；macOS + 精确 Codex CLI `0.149.0` 的打包干净安装 External 维护者 E2E 已验证；默认关闭；独立用户验收待完成 |
+| DeepSeek V4 Pro | 仅显式选择的 Custom Agent Profile；精确 Host `0.147.0` 的历史受控 E2E 已通过；绝不自动路由 |
 | MiniMax-M3 | 已内置，Desktop 运行时已验证 |
 | 阿里云百炼 Qwen3.7-Max | 已内置，Desktop 运行时已验证 |
 | 阶跃星辰 Responses 模型 | 候选，尚未运行时验证 |
@@ -148,7 +186,7 @@ Provider 桥接一次只允许一个仅所有者可读的任务，拒绝不安�
 
 ![验证与安全证据](assets/validation-proof.png)
 
-- 当前分支的 `79/79` 项隔离测试已通过，覆盖 Custom Agent schema、重复、迁移、回滚与项目级 identity shadowing 防护。
+- 当前分支的 `91/91` 项隔离测试已通过，覆盖 Host compatibility gate、Custom Agent schema、重复、迁移、回滚与项目级 identity shadowing 防护。
 - GitHub Actions 会在 macOS + Node.js 20 上对 push 与 pull request 运行同一套测试。
 - API key 只从 macOS Keychain 读取，不接受 `--api-key`。
 - 桥接采用仅所有者权限和原子脱敏归档。
@@ -275,6 +313,10 @@ Agent，只能在确认过的正式命令中增加 `--migrate-legacy`；见
 --catalog-source /absolute/path/to/catalog-or-setup-script
 ```
 
+从 package artifact 安装时，可以用 `--home-dir` 指向隔离的绝对用户目录；Doctor、
+Verifier 与 Uninstall 接受相同选项。该机制用于 clean fixture，不会改变 External child
+访问 macOS Keychain 时使用的真实用户 Home。
+
 ## 3. 应用配置并验证
 
 检查 dry-run 输出无误后，在原命令末尾追加 `--apply`，然后重启 Codex Desktop 并运行：
@@ -283,9 +325,13 @@ Agent，只能在确认过的正式命令中增加 `--migrate-legacy`；见
 node scripts/verify.mjs
 ```
 
-验证结果分为两个层级：
+验证结果会分开报告本地配置、Host 与运行时状态：
 
-- `configured: true`：文件、权限、hash、模型目录、AGENTS 标记和 Keychain 检查通过。
+- `configured: true`：文件、权限、hash、模型目录、AGENTS 标记及已请求的凭据检查在
+  本地通过；不证明 Provider runtime。
+- `discoverable`、`providerResolved`、`taskDelivered` 与 `runtimeExecuted` 分开报告，
+  不再从 TOML 文件存在推导运行时成功。
+- `configurationReady` 同时要求本地完整性和兼容 Host；`ready` 还要求 Keychain 检查通过。
 - `runtimeVerified: false`：验证器不会自动把一次受控运行时观察升级为已验证状态；在本项目
   定义并独立接受运行时证据策略前，它会保持为 `false`。
 - `agentEvidence`：按 Agent / Provider / Model 输出带时间戳的本地身份检查；没有
@@ -335,10 +381,10 @@ npm test
 Keychain、Codex 额度、`~/.codex` 或外部网络。
 
 本项目提供的是可扩展 Provider Pack 核心，并不代表所有第三方模型已经可以直接使用。
-DeepSeek V4 Flash、MiniMax-M3 与 Qwen3.7-Max 均已内置并通过隔离测试；Flash 与仅显式
-选择的 V4 Pro Profile 均已有受控维护者代码 fixture E2E 的 Level 3 证据，MiniMax-M3 与
-Qwen3.7-Max 还通过了真实 Codex Desktop 子代理冒烟测试。通用用户验收和公开安装器声明
-仍单独记录。
+DeepSeek V4 Flash、MiniMax-M3 与 Qwen3.7-Max 均已内置并通过隔离测试；Flash 已提供
+打包干净安装 External 公开 Beta，并取得一次有边界的维护者 E2E 严格证据；仅显式选择的
+V4 Pro Profile 保持既有 Level 3 边界。MiniMax-M3 与 Qwen3.7-Max 还通过了真实 Codex
+Desktop 子代理冒烟测试。独立用户验收仍单独记录。
 新增 Provider 需要以经过代码审查的方式修改
 `src/provider-packs.mjs` 并补充测试；安装器不会加载任意远程 Pack manifest。
 
@@ -366,8 +412,9 @@ Qwen3.7-Max 还通过了真实 Codex Desktop 子代理冒烟测试。通用用�
 
 ## 官方参考资料
 
-- [OpenAI：Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents)
-- [OpenAI：Codex 配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)
+- [OpenAI：Subagents](https://developers.openai.com/codex/subagents)
+- [OpenAI：Codex 配置参考](https://developers.openai.com/codex/config-reference)
+- [OpenAI：bounded agent-role overrides](https://github.com/openai/codex/pull/39299)
 - [DeepSeek：Codex 接入](https://api-docs.deepseek.com/zh-cn/quick_start/agent_integrations/codex/)
 - [DeepSeek：Responses API 兼容说明](https://api-docs.deepseek.com/zh-cn/guides/responses_api/)
 - [MiniMax：在 Codex 中使用 M3](https://platform.minimaxi.com/docs/token-plan/codex)

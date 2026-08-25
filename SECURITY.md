@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Only the current `0.4.0-beta.2` source line is supported. Pre-release versions
+Only the current `0.4.0-beta.3` source line is supported. Pre-release versions
 are experimental; report issues promptly.
 
 ## Reporting a vulnerability

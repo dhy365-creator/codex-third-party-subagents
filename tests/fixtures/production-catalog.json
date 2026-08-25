@@ -1,0 +1,26 @@
+{
+  "models": [
+    {
+      "slug": "deepseek-v4-flash",
+      "support_verbosity": false,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 10000
+      },
+      "display_name": "Synthetic Flash production-contract fixture",
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Synthetic offline fixture"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 1,
+      "experimental_supported_tools": [],
+      "input_modalities": ["text"],
+      "base_instructions": "Offline fixture only."
+    }
+  ]
+}

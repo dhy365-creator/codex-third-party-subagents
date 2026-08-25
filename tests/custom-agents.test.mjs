@@ -50,13 +50,26 @@ test('host inspection reads current multi-agent capability without writes', asyn
         : 'multi_agent stable true\nmulti_agent_v2 stable false\n'
     ),
   });
-  assert.deepEqual(result, {
-    supported: true,
-    version: '0.147.0',
-    multiAgent: true,
-    multiAgentV2: false,
-    reason: 'Codex reports multi_agent enabled',
+  assert.equal(result.supported, true);
+  assert.equal(result.version, '0.147.0');
+  assert.equal(result.multiAgent, true);
+  assert.equal(result.multiAgentV2, false);
+  assert.equal(result.compatibility.level, 'LEVEL_A_RUNTIME_VERIFIED');
+  assert.equal(result.compatibility.status, 'HISTORICAL_RUNTIME_VERIFIED');
+});
+
+test('multi_agent alone does not pass the current 0.149 cross-provider contract', async () => {
+  const result = await inspectCustomAgentHost({
+    commandRunner: async (_command, args) => (
+      args[0] === '--version'
+        ? 'codex-cli 0.149.0\n'
+        : 'multi_agent stable true\nmulti_agent_v2 stable false\n'
+    ),
   });
+  assert.equal(result.multiAgent, true);
+  assert.equal(result.supported, false);
+  assert.equal(result.compatibility.level, 'LEVEL_C_HOST_BLOCKED');
+  assert.equal(result.compatibility.configurationInstallAllowed, false);
 });
 
 test('definition inspection flags a duplicate user and project identity', async (t) => {

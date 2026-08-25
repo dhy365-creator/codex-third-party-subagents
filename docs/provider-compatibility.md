@@ -32,7 +32,7 @@ Statuses:
 
 | Provider / model | Access type | Current result | Next step |
 | --- | --- | --- | --- |
-| DeepSeek / `deepseek-v4-flash` | Official Responses | **Built-in pack; controlled maintainer E2E passed at Level 3** | Keep regression coverage; obtain independent user acceptance before broadening claims |
+| DeepSeek / `deepseek-v4-flash` | Official Responses | **Public Beta; packaged clean-install External maintainer E2E verified on macOS with exact Codex CLI `0.149.0`** | Keep External explicit/default-off; obtain independent-user acceptance before broadening claims |
 | DeepSeek / `deepseek-v4-pro` | Official Responses | **Explicit-only profile; controlled maintainer E2E passed at Level 3**: attributable Host provider/model session, tool use, bridge release, and main review recorded | Keep automatic Flash/Pro routing disabled; obtain independent user acceptance before broadening claims |
 | MiniMax / `MiniMax-M3` | Official Responses and an official Codex Desktop guide | **Runtime verified: API, Codex CLI, Desktop subagent, and bridge release passed** | Keep regression coverage; verify public-installer apply separately |
 | StepFun / `step-3.7-flash` | Official `/v1/responses` | **Tier A, priority 2** | Verify streaming tool loops and Codex subagent execution |
@@ -47,10 +47,21 @@ Statuses:
 
 Tier A means “worth testing with an API key,” not “perfectly supported.” DeepSeek
 V4 Flash, MiniMax-M3, and Qwen3.7-Max are built-in packs. V4 Pro has a separate
-explicit-only Custom Agent profile, never an automatic route. Controlled Flash
-and Pro maintainer E2Es are recorded, while independent user acceptance, broad
-public-installer, and broad routing claims remain pending. Under the strict gate
-above, no provider is currently labeled “perfectly supported.”
+explicit-only Custom Agent profile, never an automatic route. Flash has a
+packaged clean-install External Public Beta with strict local-installation
+evidence on the exact tested boundary. Independent-user acceptance and broad
+routing claims remain pending; Pro keeps its prior controlled maintainer
+boundary. Under the strict gate above, no provider is labeled “perfectly
+supported.”
+
+## DeepSeek V4 Flash clean-install External Beta — 2026-08-24
+
+The packaged artifact path completed one bounded maintainer E2E on macOS with
+exact Codex CLI `0.149.0`. Strict installation-scoped evidence set
+`providerResolved`, `taskDelivered`, `runtimeExecuted`, and `runtimeVerified`
+to true, and fresh-process Doctor/Verifier readback added no Provider request.
+External remains explicit and default-off, Provider API use is billed
+separately, and independent-user acceptance has not been claimed.
 
 ## DeepSeek V4 Flash controlled E2E — 2026-08-16
 

@@ -41,6 +41,7 @@ export function agentsBlock({
     '- A follow-up also includes `existingAgentType` and `target`.',
     `- Command: ${shellQuoted(nodePath)} ${shellQuoted(preflightPath)}`,
     '- Apply the returned `action`, `agentType`, `target`, and `forkTurns` exactly, and stop on `deny`.',
+    '- The preflight must confirm the exact Host compatibility contract before provider routing or bridge creation. A blocked or unknown Host always fails closed to an OpenAI role or deny.',
     '- The official Custom Agent TOML `name` is the Host identity source. This routing guard only selects a declared role; it never registers, renames, or overrides a Host agent.',
     '- Never send a live probe task merely to discover quota.',
     `- When provider fallback is selected, spawn/follow with only a minimal instruction to use the configured bridge; the exact task is already in the owner-only bridge. For OpenAI roles, send the scoped task normally.`,
@@ -133,6 +134,7 @@ export function workerConfig(options = {}) {
     modelProfile: options.modelProfile,
     profiles,
     customAgents,
+    hostCompatibility: options.hostCompatibility,
     defaultProviderRole: options.defaultProviderRole === undefined
       ? options.providerRole
       : options.defaultProviderRole,
