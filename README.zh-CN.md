@@ -11,8 +11,8 @@
 
 ![Codex Third-Party Subagents 架构主视觉](assets/hero-social-preview.png)
 
-> 当前版本线为 `0.4.0-beta.3`。本项目非官方、仅支持 macOS，未经 OpenAI、DeepSeek、
-> MiniMax 或阿里云官方背书。
+> 当前版本线为 `0.4.0-beta.3`。本项目非官方；Provider runtime 仅支持 macOS，Windows
+> 源码候选仅支持配置安装。本项目未经 OpenAI、DeepSeek、MiniMax 或阿里云官方背书。
 
 ## Codex 始终是主代理
 
@@ -41,10 +41,9 @@ Doctor 与 dry-run 始终可用。Blocked 或 Unknown Host 不允许应用 activ
 
 - **macOS：** `v0.4.0-beta.3` DeepSeek V4 Flash 公开 Beta 已在文档所列的精确
   Codex CLI `0.149.0` 边界完成打包干净安装维护者 E2E；External 仍需显式启用且默认关闭。
-- **Windows：** 正式 Release `.tgz` 已验证可作为 npm 依赖安装，package bin shim 可用，
-  安装器 dry-run 也已独立验证。当前 runtime/apply 尚不支持；本版本会在 Windows 上于托管
-  文件写入前安全阻断。Windows 安全凭据后端尚未实现。不要用明文 `.env` 或
-  `DEEPSEEK_API_KEY` 环境变量作为 workaround。
+- **Windows：** 正式 Release `.tgz` 仍只支持 dry-run。本源码候选新增 Windows Credential
+  Manager、owner-only ACL 配置安装、Doctor/Verifier 配置语义与安全卸载。Provider-backed
+  runtime 在 Phase 2 验证前继续阻断；不要用明文 `.env` 或长期 `DEEPSEEK_API_KEY` 绕过。
 
 ### Codex 原生提供什么
 

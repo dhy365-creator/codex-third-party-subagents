@@ -2,6 +2,22 @@
 
 最后更新：2026-08-26
 
+## Windows Support Phase 1 本地候选（2026-08-26）
+
+- 基于 `e5926e9c4f01cddc2a1a7157348e3bd828a83b48` 建立 Windows 本地候选：安装器允许
+  Windows 配置写入，使用 Windows Credential Manager 与当前用户 owner-only ACL，不使用
+  `.env`、长期环境变量或明文文件保存 Provider credential。
+- Credential Manager helper 通过一次性认证的随机 named pipe 传输 secret；Provider secret
+  不进入 argv、环境变量、文件、stdout 或 stderr。合成凭据 write/read/match/delete/read-after-delete
+  已在 Windows 11 原生后端通过并完成清理。
+- Installer dry-run/apply/second apply、Doctor、Verifier、uninstall/second uninstall 已在隔离
+  Windows fixture 通过；卸载会恢复安装前已有文件的原始 Windows security descriptor；
+  真实用户 Codex config 哈希、长度和时间戳保持不变。
+- Windows 配置可就绪，但 Provider runtime 明确保持 `BLOCKED_PENDING_PHASE_2`，
+  `runtimeVerified=false`；External 保持 default-off，本任务 Provider requests 为 `0`。
+- macOS 测试发现与行为保留完整；Windows 测试入口显式跳过依赖 macOS POSIX 权限、进程和
+  External runtime contract 的 Phase 2 suites，不将它们伪装成 Windows runtime 证据。
+
 ## Windows Release-artifact independent clean-install evidence（2026-08-26）
 
 - `WINDOWS RELEASE-ARTIFACT CLEAN INSTALL E2E = BLOCKED`：公开

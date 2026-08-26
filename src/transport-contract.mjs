@@ -81,9 +81,11 @@ function boundedString(value, label, maxLength = 4096) {
 }
 
 function safeRelativeFile(value) {
-  if (typeof value !== 'string' || !value.trim() || path.isAbsolute(value)) return false;
-  const normalized = path.normalize(value);
-  return normalized === value && normalized !== '..' && !normalized.startsWith(`..${path.sep}`);
+  if (typeof value !== 'string' || !value.trim()) return false;
+  const portable = value.replaceAll('\\', '/');
+  if (path.posix.isAbsolute(portable) || /^[A-Za-z]:\//u.test(portable)) return false;
+  const normalized = path.posix.normalize(portable);
+  return normalized === portable && normalized !== '..' && !normalized.startsWith('../');
 }
 
 function stringArray(value, label, { relative = false, maxItems = 64 } = {}) {

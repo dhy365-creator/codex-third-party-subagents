@@ -151,7 +151,9 @@ test('Pro and other provider tuples do not inherit Flash maintainer evidence', (
   assert.equal(pro.transports.external.maintainerEvidence.runtimeEvidence, 'UNKNOWN');
 });
 
-test('ordinary Verifier consumes stored strict Flash evidence without a live request', async (t) => {
+test('ordinary Verifier consumes stored strict Flash evidence without a live request', {
+  skip: process.platform === 'win32' && 'macOS External runtime evidence permissions',
+}, async (t) => {
   const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'external-verifier-evidence-'));
   t.after(() => fs.rm(homeDir, { recursive: true, force: true }));
   const runtimeRoot = path.join(

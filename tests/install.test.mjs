@@ -53,7 +53,7 @@ async function setup(t) {
   };
   const options = {
     homeDir,
-    uid: process.getuid(),
+    uid: process.getuid?.(),
     username: 'fixture-user',
     nodePath: process.execPath,
     platform: 'darwin',

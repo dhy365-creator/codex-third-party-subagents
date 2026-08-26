@@ -68,6 +68,8 @@ export function agentToml({
   keychainAccount,
   keychainService,
   providerPack,
+  platform = 'darwin',
+  runtimeBlockerPath,
 } = {}) {
   const pack = providerPack ?? {};
   const providerRole = pack.role ?? 'provider_worker';
@@ -105,8 +107,13 @@ export function agentToml({
     `wire_api = ${toml(pack.wireApi ?? 'responses')}`,
     '',
     `[model_providers.${provider}.auth]`,
-    `command = ${toml('/usr/bin/security')}`,
-    `args = ["find-generic-password", "-a", ${toml(keychainAccount)}, "-s", ${toml(keychainService ?? pack.keychainService)}, "-w"]`,
+    ...(platform === 'win32' ? [
+      `command = ${toml(nodePath)}`,
+      `args = [${toml(runtimeBlockerPath)}]`,
+    ] : [
+      `command = ${toml('/usr/bin/security')}`,
+      `args = ["find-generic-password", "-a", ${toml(keychainAccount)}, "-s", ${toml(keychainService ?? pack.keychainService)}, "-w"]`,
+    ]),
     'timeout_ms = 5000',
     'refresh_interval_ms = 0',
   ].join('\n');
@@ -151,7 +158,8 @@ export function workerConfig(options = {}) {
     configPath: options.configPath,
     keychainAccount: options.keychainAccount,
     keychainService: options.keychainService,
-    platform: 'darwin',
+    credentialBackend: options.credentialBackend,
+    platform: options.platform ?? 'darwin',
     mainModelPreserved: true,
     delegatedDataConsent: true,
     providerCapabilities: options.providerCapabilities,

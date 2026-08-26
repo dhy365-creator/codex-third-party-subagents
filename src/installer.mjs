@@ -16,7 +16,7 @@ import {
   reduceCatalogForProvider,
 } from './catalog.mjs';
 import { PRODUCTION_CATALOG_CONTRACT, validateProductionCatalog } from './production-catalog-contract.mjs';
-import { keychainReady } from './keychain.mjs';
+import { credentialBackend, credentialReady } from './credentials.mjs';
 import {
   inspectCustomAgentDefinitions,
   inspectCustomAgentHost,
@@ -29,6 +29,7 @@ import {
 } from './provider-packs.mjs';
 import {
   copyOwnerOnly,
+  assertOwnerOnly,
   ensureDir,
   fs,
   lstatIfExists,
@@ -36,6 +37,11 @@ import {
   sha256,
   writeFileIfChanged,
 } from './fs-utils.mjs';
+import {
+  assertNoReparsePath,
+  captureWindowsSecurityDescriptor,
+  privatePathReady,
+} from './platform-security.mjs';
 import {
   agentToml,
   agentsBlock,
@@ -60,6 +66,11 @@ const RUNTIME_FILES = [
   'fs-utils.mjs',
   'host-compatibility.mjs',
   'keychain.mjs',
+  'credentials.mjs',
+  'credentials/windows-credential-manager.mjs',
+  'credentials/windows-credential-helper.ps1',
+  'credential-runtime-blocker.mjs',
+  'platform-security.mjs',
   'preflight-runtime.mjs',
   'provider-packs.mjs',
   'routing.mjs',
@@ -243,8 +254,8 @@ async function managedDirectory(filePath, previousDirectories = []) {
 
 async function readPreviousManifest(env) {
   if (!(await pathExists(env.manifestPath))) return null;
-  const info = await regularFile(env.manifestPath);
-  if ((info.mode & 0o077) !== 0) throw new Error('existing install manifest is not owner-only');
+  await regularFile(env.manifestPath);
+  await assertOwnerOnly(env.manifestPath, 0o600, env.uid);
   const manifest = JSON.parse(await fs.readFile(env.manifestPath, 'utf8'));
   if (manifest.schemaVersion !== 1 || manifest.environment?.homeDir !== env.homeDir) {
     throw new Error('existing install manifest is incompatible with this home directory');
@@ -252,7 +263,7 @@ async function readPreviousManifest(env) {
   return manifest;
 }
 
-async function makeBackup(filePath, env) {
+async function makeBackup(filePath, env, previousBackup = null) {
   const info = await regularFile(filePath);
   if (!info) return null;
   const data = await fs.readFile(filePath);
@@ -264,6 +275,9 @@ async function makeBackup(filePath, env) {
     path: backupPath,
     hash: sha256(data),
     originalMode: info.mode & 0o777,
+    windowsSecurityDescriptor: env.platform === 'win32'
+      ? previousBackup?.windowsSecurityDescriptor ?? await captureWindowsSecurityDescriptor(filePath)
+      : null,
   };
 }
 
@@ -273,10 +287,13 @@ async function applyFile({ filePath, contents, mode, env, dryRun, previous }) {
   const current = info ? await fs.readFile(filePath) : null;
   const currentHash = current ? sha256(current) : null;
   const desiredHash = sha256(data);
-  const changed = !info || currentHash !== desiredHash || (info.mode & 0o777) !== mode;
+  const secure = info ? await privatePathReady(filePath, {
+    kind: 'file', mode, uid: env.uid, platform: env.platform,
+  }) : false;
+  const changed = !info || currentHash !== desiredHash || !secure;
   let backup = previous?.backup ?? null;
   if (changed && info && currentHash !== previous?.hash && !dryRun) {
-    backup = await makeBackup(filePath, env);
+    backup = await makeBackup(filePath, env, previous?.backup);
   }
   if (!dryRun && changed) await writeFileIfChanged(filePath, data, { mode });
   return {
@@ -313,6 +330,7 @@ export async function install(options = {}) {
   const env = discoverEnvironment({ ...normalized, providerPack, platform, env: normalized.env ?? process.env });
   const dryRun = normalized.apply !== true;
   if (!dryRun) assertSupportedPlatform(platform);
+  if (!dryRun) await assertNoReparsePath(env.codexDir, env.homeDir);
 
   const previousManifest = await readPreviousManifest(env);
   const managedDirectories = [await managedDirectory(
@@ -324,6 +342,19 @@ export async function install(options = {}) {
     profile,
     environment: profileEnvironment(env, profile),
   }));
+  if (!dryRun) {
+    const managedRoots = [
+      env.codexDir,
+      env.agentsDir,
+      env.runtimeDir,
+      path.dirname(env.catalogPath),
+      path.dirname(env.preflightPath),
+      env.backupDir,
+    ];
+    for (const managedRoot of managedRoots) {
+      await assertNoReparsePath(managedRoot, env.homeDir);
+    }
+  }
   const expectedCustomAgents = customAgentDefinitions(profiles);
   const customAgentHost = await (normalized.inspectCustomAgentHostImpl ?? inspectCustomAgentHost)({
     codexPath: normalized.codexPath,
@@ -410,7 +441,7 @@ export async function install(options = {}) {
   }
 
   if (!dryRun) {
-    const check = normalized.keychainReadyImpl ?? keychainReady;
+    const check = normalized.credentialReadyImpl ?? normalized.keychainReadyImpl ?? credentialReady;
     const ready = await check({
       account: env.keychainAccount,
       service: providerPack.keychainService,
@@ -419,7 +450,7 @@ export async function install(options = {}) {
       execFileImpl: normalized.execFileImpl,
     });
     if (!ready) {
-      throw new Error('provider Keychain credential is not provisioned in macOS Keychain');
+      throw new Error('provider credential is not provisioned in the supported OS credential backend');
     }
   }
 
@@ -454,6 +485,8 @@ export async function install(options = {}) {
     configPath: env.configPath,
     keychainAccount: env.keychainAccount,
     keychainService: providerPack.keychainService,
+    credentialBackend: credentialBackend(platform),
+    platform,
     providerId: providerPack.id,
     providerRole: providerPack.role,
     model: providerPack.model,
@@ -484,6 +517,8 @@ export async function install(options = {}) {
           keychainAccount: env.keychainAccount,
           keychainService: profile.keychainService,
           providerPack: profile,
+          platform,
+          runtimeBlockerPath: path.join(env.runtimeDir, 'credential-runtime-blocker.mjs'),
         }),
         mode: 0o600,
         kind: 'agent',
@@ -578,7 +613,8 @@ export async function install(options = {}) {
     secretStorage: {
       service: providerPack.keychainService,
       account: env.keychainAccount,
-      value: 'keychain-only',
+      backend: credentialBackend(platform),
+      value: platform === 'darwin' ? 'keychain-only' : 'windows-credential-manager-only',
     },
   };
 
@@ -596,6 +632,7 @@ export async function install(options = {}) {
     manifestPath: env.manifestPath,
     catalogAcquired: Boolean(acquired),
     keychainVerified: !dryRun,
+    credentialBackend: credentialBackend(platform),
     customAgents,
     migration,
     profile: {

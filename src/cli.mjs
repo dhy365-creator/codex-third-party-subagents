@@ -128,7 +128,7 @@ function installHelp() {
 }
 
 function uninstallHelp() {
-  return 'Usage: node scripts/uninstall.mjs [--provider <provider-pack-id>] [--home-dir <absolute-user-home>] [--apply]\nDry-run is the default. Uninstall removes every installed profile for that provider; Keychain credentials and bridge archives are never removed.\n';
+  return 'Usage: node scripts/uninstall.mjs [--provider <provider-pack-id>] [--home-dir <absolute-user-home>] [--apply]\nDry-run is the default. Uninstall removes every installed profile for that provider; OS credentials and bridge archives are never removed.\n';
 }
 
 function summarizeInstall(result) {

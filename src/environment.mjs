@@ -117,8 +117,8 @@ export function discoverEnvironment({
 }
 
 export function assertSupportedPlatform(platform = process.platform) {
-  if (platform !== 'darwin') {
-    throw new Error(`${PACKAGE_NAME} is macOS-only (darwin)`);
+  if (!['darwin', 'win32'].includes(platform)) {
+    throw new Error(`${PACKAGE_NAME} installation is supported only on macOS and Windows`);
   }
 }
 

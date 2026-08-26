@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { discoverEnvironment, DEFAULT_PROVIDER_ID } from './environment.mjs';
-import { keychainReady } from './keychain.mjs';
+import { credentialBackend, credentialReady as checkCredentialReady } from './credentials.mjs';
 import { resolveProviderPack, RUNTIME_NAMESPACE } from './provider-packs.mjs';
 import {
   inspectCustomAgentDefinitions,
@@ -13,6 +13,7 @@ import {
   externalReadinessChecks,
   inspectExternalTransportReadiness,
 } from './transport-readiness.mjs';
+import { privatePathReady } from './platform-security.mjs';
 
 const STATUS = Object.freeze({ PASS: 'PASS', WARN: 'WARN', BLOCKED: 'BLOCKED' });
 const VALUE_FLAGS = new Set(['provider', 'model', 'home-dir']);
@@ -142,8 +143,11 @@ export async function runDoctor(options = {}) {
     Number.isInteger(major) && major >= 20 ? STATUS.PASS : STATUS.BLOCKED,
     Number.isInteger(major) && major >= 20 ? `version ${major} satisfies >=20` : 'Node.js >=20 is required',
   );
-  add(checks, 'Operating system', platform === 'darwin' ? STATUS.PASS : STATUS.BLOCKED,
-    platform === 'darwin' ? 'macOS detected' : 'macOS is required');
+  const installPlatformSupported = ['darwin', 'win32'].includes(platform);
+  add(checks, 'Operating system', installPlatformSupported ? STATUS.PASS : STATUS.BLOCKED,
+    platform === 'darwin' ? 'macOS configuration installation is supported'
+      : platform === 'win32' ? 'Windows configuration installation is supported; Provider runtime remains blocked'
+        : 'operating system is unsupported');
 
   const codexDirInfo = await lstat(baseEnv.codexDir);
   if (!codexDirInfo) {
@@ -326,8 +330,10 @@ export async function runDoctor(options = {}) {
     add(checks, 'Installation state', STATUS.WARN, 'provider worker is not installed');
   } else if (installState.error) {
     add(checks, 'Installation state', STATUS.BLOCKED, installState.error);
-  } else if (mode(installState.info) !== 0o600) {
-    add(checks, 'Installation state', STATUS.BLOCKED, 'install manifest must use mode 0600');
+  } else if (!await privatePathReady(baseEnv.manifestPath, {
+    kind: 'file', mode: 0o600, uid: baseEnv.uid, platform,
+  })) {
+    add(checks, 'Installation state', STATUS.BLOCKED, 'install manifest is not owner-only');
   } else if (options.provider && installedProvider !== providerId) {
     add(checks, 'Installation state', STATUS.BLOCKED, 'installed provider differs from the selected provider');
   } else if (providerPack && !profileIsInstalled(installState.manifest, providerPack)) {
@@ -343,9 +349,12 @@ export async function runDoctor(options = {}) {
       : 'luna_worker was not detected; confirm Spark or Luna availability before install');
 
   let credentialReady = null;
-  if (providerPack && platform === 'darwin') {
+  const credentialCheckName = platform === 'darwin'
+    ? 'Keychain credential'
+    : platform === 'win32' ? 'Windows credential backend' : 'Credential backend';
+  if (providerPack && installPlatformSupported) {
     try {
-      const present = await (options.keychainReadyImpl ?? keychainReady)({
+      const present = await (options.credentialReadyImpl ?? options.keychainReadyImpl ?? checkCredentialReady)({
         account: baseEnv.keychainAccount,
         service: providerPack.keychainService,
         platform,
@@ -353,14 +362,14 @@ export async function runDoctor(options = {}) {
         execFileImpl: options.execFileImpl,
       });
       credentialReady = present;
-      add(checks, 'Keychain credential', present ? STATUS.PASS : STATUS.BLOCKED,
-        `provider credential is ${present ? 'present' : 'missing'}`);
+      add(checks, credentialCheckName, present ? STATUS.PASS : STATUS.BLOCKED,
+        `${credentialBackend(platform)} credential is ${present ? 'ready' : 'missing'}`);
     } catch {
       credentialReady = false;
-      add(checks, 'Keychain credential', STATUS.BLOCKED, 'provider credential is missing');
+      add(checks, credentialCheckName, STATUS.BLOCKED, 'provider credential could not be verified');
     }
   } else {
-    add(checks, 'Keychain credential', STATUS.WARN, 'credential check is unavailable');
+    add(checks, credentialCheckName, STATUS.WARN, 'credential check is unavailable');
   }
 
   let externalReadiness = null;
@@ -391,7 +400,7 @@ export async function runDoctor(options = {}) {
         homeDir,
         customAgentHost,
       });
-      const ready = result.configurationReady ?? (
+       const ready = result.configurationReady ?? (
         result.configured === true
         && customAgentHost?.compatibility?.configurationInstallAllowed === true
       );
@@ -418,6 +427,8 @@ export async function runDoctor(options = {}) {
     worker: providerPack?.role ?? null,
     profile: providerPack?.profile ?? null,
     installed: installState.installed,
+    configurationSupported: installPlatformSupported,
+    providerRuntimeStatus: platform === 'win32' ? 'BLOCKED_PENDING_PHASE_2' : 'VERSION_SCOPED',
     customAgentHost,
     transports: Object.freeze({ native: nativeTransport, external: externalReadiness }),
     checks,

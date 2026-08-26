@@ -9,6 +9,11 @@
   npm install、package-bin shim 与 installer dry-run 均通过；`--apply`/runtime 在写入前安全
   阻断，Windows 安全凭据后端尚未实现。测试 Codex CLI `0.141.0` 与严格 Flash `0.149.0`
   边界分开，Provider requests `0`，`runtimeVerified=false`。
+- [x] 2026-08-26 完成 Windows Support Phase 1 本地候选：Windows Credential Manager、
+  当前用户 ACL、原始 ACL 卸载恢复、配置安装/幂等/卸载、Doctor/Verifier 与原生合成凭据清理均通过；Windows
+  Provider runtime 继续 `BLOCKED_PENDING_PHASE_2`，External default-off，Provider requests `0`。
+- [ ] Phase 2 单独验证 Windows Provider runtime、原生 subprocess/process-tree、受支持 Codex
+  CLI contract、Release artifact clean install，并仅在明确授权后执行一次 Flash live E2E。
 - [ ] 取得 DeepSeek V4 Flash 独立真实用户验收；公开 Beta 与维护者 clean-install E2E 不自动
   扩写为广义用户验收、自动路由或官方背书。
 

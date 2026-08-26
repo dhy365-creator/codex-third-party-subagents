@@ -102,11 +102,13 @@ test('doctor reports keychain missing and uninstalled state', async (t) => {
   assert.equal(result.status, 'BLOCKED');
 });
 
-test('doctor validates installed worker with no errors when prerequisites are met', async (t) => {
+test('doctor validates installed worker with no errors when prerequisites are met', {
+  skip: process.platform === 'win32' && 'macOS installation permission semantics',
+}, async (t) => {
   const homeDir = await setupHome(t);
   const options = {
     homeDir,
-    uid: process.getuid(),
+    uid: process.getuid?.(),
     username: 'fixture-user',
     nodePath: process.execPath,
     platform: 'darwin',
@@ -147,7 +149,7 @@ test('doctor does not expose private verifier issue paths', async (t) => {
   const homeDir = await setupHome(t);
   const options = {
     homeDir,
-    uid: process.getuid(),
+    uid: process.getuid?.(),
     username: 'fixture-user',
     nodePath: process.execPath,
     platform: 'darwin',
@@ -222,11 +224,13 @@ test('doctor blocks when model does not match selected provider', async (t) => {
   assert.equal(result.status, 'BLOCKED');
 });
 
-test('doctor reports the selected Pro worker and keeps Flash distinct', async (t) => {
+test('doctor reports the selected Pro worker and keeps Flash distinct', {
+  skip: process.platform === 'win32' && 'macOS installation permission semantics',
+}, async (t) => {
   const homeDir = await setupHome(t);
   const options = {
     homeDir,
-    uid: process.getuid(),
+    uid: process.getuid?.(),
     username: 'fixture-user',
     nodePath: process.execPath,
     platform: 'darwin',
@@ -258,11 +262,13 @@ test('doctor reports the selected Pro worker and keeps Flash distinct', async (t
   assert.equal(flash.worker, 'deepseek_worker');
 });
 
-test('doctor blocks an explicit Pro selection when only Flash is installed', async (t) => {
+test('doctor blocks an explicit Pro selection when only Flash is installed', {
+  skip: process.platform === 'win32' && 'macOS installation permission semantics',
+}, async (t) => {
   const homeDir = await setupHome(t);
   const options = {
     homeDir,
-    uid: process.getuid(),
+    uid: process.getuid?.(),
     username: 'fixture-user',
     nodePath: process.execPath,
     platform: 'darwin',

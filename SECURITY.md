@@ -21,12 +21,13 @@ task body or credentials in any report.
 
 ## Security model
 
-- API keys are never stored in this repository. Credentials live in the macOS
-  Keychain and are read at runtime only.
-- The reviewed credential path in `v0.4.0-beta.3` is macOS Keychain via the
-  command-backed `/usr/bin/security` semantics only. A supported Windows
-  Credential Manager, DPAPI, or equivalent secure backend is not implemented;
-  do not work around this with plaintext `.env` files or long-lived
+- API keys are never stored in this repository. The released runtime reads
+  credentials from macOS Keychain. The Windows source candidate uses the
+  current user's Windows Credential Manager for configuration readiness only.
+- macOS uses command-backed `/usr/bin/security`. Windows Credential Manager
+  operations use Win32 credential APIs behind an authenticated local named pipe;
+  Provider-backed Windows runtime remains blocked pending Phase 2. Do not work
+  around either platform backend with plaintext `.env` files or long-lived
   `DEEPSEEK_API_KEY` environment variables.
 - Users must review each provider's privacy, pricing, data-retention, and
   regional policies. Provider behavior and compatibility may change without a
@@ -36,8 +37,8 @@ task body or credentials in any report.
   are atomically archived to `completed-*` or `failed-*` when the task ends.
   `message` and `cwd` are replaced with `[REDACTED]` before the atomic archive
   rename; archives are never deleted automatically.
-- The installer never accepts an API key as a CLI argument. It only verifies a
-  macOS Keychain item, and it does not modify the main `config.toml`.
+- The installer never accepts an API key as a CLI argument. It only verifies the
+  selected OS credential backend, and it does not modify the main `config.toml`.
 - Uninstall validates every managed hash and backup before applying any action.
   A conflict stops the entire uninstall plan instead of partially removing
   files or overwriting user edits.

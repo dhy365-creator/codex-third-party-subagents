@@ -39,7 +39,7 @@ test('production runner uses one gated fake request and persists strict local ev
     billableAuthorized: true,
     keychainAccount: 'fixture-user',
     keychainReadyImpl: async () => true,
-    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid(), homedir: fixture.base }),
+    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid?.(), homedir: fixture.base }),
     credentialPreflightExecFileImpl: async () => ({ stdout: Buffer.from('fixture-value\n') }),
   });
   assert.equal(result.requestCount, 1);
@@ -76,7 +76,7 @@ test('production runner blocks before a request when authorization is absent', a
     runtimeRouteEnabled: true,
     billableAuthorized: false,
     keychainReadyImpl: async () => true,
-    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid(), homedir: fixture.base }),
+    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid?.(), homedir: fixture.base }),
     credentialPreflightExecFileImpl: async () => ({ stdout: Buffer.from('fixture-value\n') }),
   }), /authorization/u);
   assert.equal((await readExternalLiveRequestLedger(fixture.stateRoot)).attempts.length, 0);
@@ -97,7 +97,7 @@ test('production runner rejects an incomplete catalog before permit, ledgers, sl
     billableAuthorized: true,
     keychainAccount: 'fixture-user',
     keychainReadyImpl: async () => true,
-    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid(), homedir: fixture.base }),
+    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid?.(), homedir: fixture.base }),
   }), (error) => error.code === 'PRODUCTION_CATALOG_INVALID');
   assert.equal((await readExternalLiveRequestLedger(fixture.stateRoot)).attempts.length, 0);
   await assert.rejects(fs.access(path.join(fixture.stateRoot, 'active.json')));
@@ -121,7 +121,7 @@ test('strict evidence is bound to one runtime root and rejects cross-fixture cop
     billableAuthorized: true,
     keychainAccount: 'fixture-user',
     keychainReadyImpl: async () => true,
-    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid(), homedir: source.base }),
+    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid?.(), homedir: source.base }),
     credentialPreflightExecFileImpl: async () => ({ stdout: Buffer.from('fixture-value\n') }),
   });
   const sourceEvidence = path.join(source.stateRoot, 'verified-evidence');
@@ -161,7 +161,7 @@ test('production runner mirrors one request into a clean fixture while advancing
     billableAuthorized: true,
     keychainAccount: 'fixture-user',
     keychainReadyImpl: async () => true,
-    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid(), homedir: fixture.base }),
+    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid?.(), homedir: fixture.base }),
     credentialPreflightExecFileImpl: async () => ({ stdout: Buffer.from('fixture-value\n') }),
   });
   assert.equal(result.requestCount, 3);
@@ -191,7 +191,7 @@ test('production runner archives and releases the slot when launch validation fa
     billableAuthorized: true,
     keychainAccount: 'fixture-user',
     keychainReadyImpl: async () => true,
-    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid(), homedir: fixture.base }),
+    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid?.(), homedir: fixture.base }),
     credentialPreflightExecFileImpl: async () => ({ stdout: Buffer.from('fixture-value\n') }),
     outputLimits: { stdoutBytes: 0, stderrBytes: 1024 },
   }), /execution failed/u);
@@ -216,7 +216,7 @@ test('failed child-context credential preflight does not increment ledger or lau
     billableAuthorized: true,
     keychainAccount: 'fixture-user',
     keychainReadyImpl: async () => true,
-    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid(), homedir: fixture.base }),
+    userInfoImpl: () => ({ username: 'fixture-user', uid: process.getuid?.(), homedir: fixture.base }),
     credentialPreflightExecFileImpl: async () => {
       const error = new Error('secret-bearing provider output must be discarded');
       error.code = 44;
