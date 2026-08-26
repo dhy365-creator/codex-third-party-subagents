@@ -50,4 +50,23 @@ Candidate directions, not release commitments:
   protocol, tool-loop, failure, bridge-release, and main-review evidence.
 - **under evaluation / not committed** — routing-policy improvements that retain
   safe OpenAI fallback behavior.
-- **exploratory / not committed** — Windows or Linux support.
+
+### Windows Support Phase 1 — Secure Credential Backend + Installer Compatibility
+
+This is a bounded direction under evaluation, not a release/date or current
+support commitment.
+
+- **current evidence** — the `v0.4.0-beta.3` Release artifact installs as an npm
+  dependency on Windows, package-bin shims and installer dry-run pass, while
+  runtime/apply intentionally fails closed before writes. Windows Provider
+  runtime is not supported and no secure Windows credential backend is implemented.
+- **under evaluation / not committed** — select and review a secure Windows
+  credential backend (for example Windows Credential Manager/DPAPI or another
+  reviewed command-backed mechanism).
+- **under evaluation / not committed** — define Windows-safe installer/runtime
+  filesystem and ACL semantics instead of assuming POSIX `chmod` behavior.
+- **under evaluation / not committed** — validate subprocess/process cleanup,
+  path, and symlink behavior on Windows; establish an explicit supported Codex
+  CLI compatibility boundary; and repeat the Windows Release-artifact
+  clean-install E2E before marking Windows Beta supported.
+- **exploratory / not committed** — Linux support.

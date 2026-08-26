@@ -37,6 +37,15 @@ Doctor 与 dry-run 始终可用。Blocked 或 Unknown Host 不允许应用 activ
 安装、创建 Provider bridge、路由到第三方子代理或报告运行时成功。完整等级、字段契约和
 版本矩阵见 [Host compatibility](docs/host-compatibility.md)。
 
+### 平台与 Release artifact 状态
+
+- **macOS：** `v0.4.0-beta.3` DeepSeek V4 Flash 公开 Beta 已在文档所列的精确
+  Codex CLI `0.149.0` 边界完成打包干净安装维护者 E2E；External 仍需显式启用且默认关闭。
+- **Windows：** 正式 Release `.tgz` 已验证可作为 npm 依赖安装，package bin shim 可用，
+  安装器 dry-run 也已独立验证。当前 runtime/apply 尚不支持；本版本会在 Windows 上于托管
+  文件写入前安全阻断。Windows 安全凭据后端尚未实现。不要用明文 `.env` 或
+  `DEEPSEEK_API_KEY` 环境变量作为 workaround。
+
 ### Codex 原生提供什么
 
 Codex 负责 Custom Agent 发现、子代理 spawn/follow-up 编排、受支持的 OpenAI per-agent
@@ -230,6 +239,8 @@ Provider 桥接一次只允许一个仅所有者可读的任务，拒绝不安�
 ## 环境要求
 
 - macOS，以及支持自定义子代理的 Codex Desktop。
+- `v0.4.0-beta.3` 的 Windows runtime/apply 尚不支持；能安装 package 和运行 dry-run
+  不等于 Windows Provider 支持。
 - Node.js `>=20`。
 - 已准备好的第三方 Provider API 凭据。
 - 启用 Luna 回退时，需要可用的 `luna_worker`。

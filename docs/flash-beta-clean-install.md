@@ -4,6 +4,20 @@ This is an explicit, default-off Beta path for exact DeepSeek V4 Flash on exact
 Codex CLI `0.149.0`. It does not enable automatic External routing, V4 Pro,
 MiniMax, or Qwen. A real E2E is billable and must have separate authorization.
 
+## Windows artifact boundary
+
+The public `v0.4.0-beta.3` `.tgz` has been independently installed as an npm
+dependency on Windows; its package-bin shims and installer dry-run also passed.
+This does not make Windows a supported runtime/apply platform: both apply
+attempts intentionally fail closed before managed-file writes because the
+release is macOS-only. The current secure credential path is macOS Keychain;
+no supported Windows Credential Manager/DPAPI backend exists. The independent
+Windows check used Codex CLI `0.141.0`, outside the exact Flash boundary tested
+with `0.149.0`; no Provider-backed Windows E2E ran and Provider requests were
+`0`. Do not use plaintext `.env` files or `DEEPSEEK_API_KEY` environment
+variables as a workaround. The clean-install/apply/E2E commands below are
+macOS-only.
+
 ## Install from a package artifact
 
 Install the `.tgz` in a clean local project and use the generated commands. The

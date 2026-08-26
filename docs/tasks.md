@@ -5,6 +5,10 @@
 - [x] 2026-08-25 将已接受的 Flash Beta RC 通过 PR #15 合并到 `main`，发布
   `v0.4.0-beta.3` tag 与 GitHub prerelease；`main`/tag CI、66 文件资产 SHA-256 回读和
   fresh install 均通过，npm registry 未发布。
+- [x] 2026-08-26 完成独立 Windows Release-artifact clean-install 基线：正式 `.tgz` 完整性、
+  npm install、package-bin shim 与 installer dry-run 均通过；`--apply`/runtime 在写入前安全
+  阻断，Windows 安全凭据后端尚未实现。测试 Codex CLI `0.141.0` 与严格 Flash `0.149.0`
+  边界分开，Provider requests `0`，`runtimeVerified=false`。
 - [ ] 取得 DeepSeek V4 Flash 独立真实用户验收；公开 Beta 与维护者 clean-install E2E 不自动
   扩写为广义用户验收、自动路由或官方背书。
 

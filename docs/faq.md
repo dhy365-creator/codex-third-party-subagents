@@ -76,6 +76,17 @@ pack files, helper artifacts, manifest/backups, and one bounded AGENTS block.
 
 ## Compatibility
 
+### Is Windows supported?
+
+Not for runtime or apply in `v0.4.0-beta.3`. The public Release `.tgz` has
+been independently installed as an npm dependency on Windows; package-bin
+shims and installer dry-run passed. The installer intentionally fails closed
+before managed-file writes on Windows, and no secure Windows credential backend
+is implemented. The independent check used Codex CLI `0.141.0`, outside the
+exact Flash `0.149.0` boundary, so it does not establish Windows Provider
+runtime support. Do not use plaintext `.env` files or `DEEPSEEK_API_KEY`
+environment variables as a workaround.
+
 ### Which providers are currently supported?
 
 Current packs/profiles and evidence are:

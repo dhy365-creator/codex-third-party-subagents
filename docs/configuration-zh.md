@@ -16,6 +16,12 @@ analysis，不能 `--apply` 或创建 active provider bridge。
 普通 External registry、factory、runtime route 或自动 fallback。实际 E2E 仍需独立的
 显式付费授权和全部三个执行开关。见 [Flash Beta 干净安装指南](flash-beta-clean-install.md)。
 
+`v0.4.0-beta.3` 的正式 Release artifact 已在 Windows 上验证可作为 npm 依赖安装，
+package-bin shim 和 installer dry-run 也通过；这不表示 Windows runtime/apply 已支持。
+当前版本会在 Windows 上于写入前 fail closed，且尚无 Windows 安全凭据后端。不要用明文
+`.env` 或长期 `DEEPSEEK_API_KEY` 环境变量绕过凭据边界；Provider-backed Windows 执行需等待
+受支持的安全后端和完整 Windows E2E。
+
 安装器会要求确认：
 
 1. 套餐是 Plus 还是 Pro。
@@ -108,6 +114,9 @@ Flash 的自动替换或回退。
 ```sh
 --apply
 ```
+
+以上条件不改变当前平台边界：本版本的正式写入/runtime 路径仅支持 macOS。Windows 上即使
+package 安装和 dry-run 成功，也不要追加 `--apply`。
 
 写入范围仅包括：
 
