@@ -330,13 +330,14 @@ export async function install(options = {}) {
   const env = discoverEnvironment({ ...normalized, providerPack, platform, env: normalized.env ?? process.env });
   const dryRun = normalized.apply !== true;
   if (!dryRun) assertSupportedPlatform(platform);
-  if (!dryRun) await assertNoReparsePath(env.codexDir, env.homeDir);
+  if (!dryRun) await assertNoReparsePath(env.codexDir, env.homeDir, { platform });
 
   const previousManifest = await readPreviousManifest(env);
-  const managedDirectories = [await managedDirectory(
-    env.runtimeDir,
-    previousManifest?.managedDirectories ?? [],
-  )];
+  const previousDirectories = previousManifest?.managedDirectories ?? [];
+  const managedDirectories = await Promise.all([
+    managedDirectory(env.runtimeDir, previousDirectories),
+    managedDirectory(path.join(env.runtimeDir, 'credentials'), previousDirectories),
+  ]);
   const profiles = activeProfiles(normalized, previousManifest);
   const profileEnvironments = profiles.map((profile) => ({
     profile,
@@ -352,7 +353,7 @@ export async function install(options = {}) {
       env.backupDir,
     ];
     for (const managedRoot of managedRoots) {
-      await assertNoReparsePath(managedRoot, env.homeDir);
+      await assertNoReparsePath(managedRoot, env.homeDir, { platform });
     }
   }
   const expectedCustomAgents = customAgentDefinitions(profiles);

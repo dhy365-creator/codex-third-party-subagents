@@ -157,9 +157,12 @@ export function summarizeVerify(result) {
     taskDelivered: result.taskDelivered,
     runtimeExecuted: result.runtimeExecuted,
     runtimeVerified: result.runtimeVerified,
+    installConfigurationReady: result.installConfigurationReady,
     configurationReady: result.configurationReady,
     ready: result.ready,
     credentialReady: result.credentialReady,
+    providerRuntimeReady: result.providerRuntimeReady,
+    providerRuntimeStatus: result.providerRuntimeStatus,
     hostCompatibility: result.hostCompatibility,
     transport: result.transport,
     providerId: result.providerId,
@@ -177,6 +180,9 @@ export function summarizeVerify(result) {
   };
   if (result.ready === true && result.credentialReady === true) {
     summary.POST_INSTALL_STATUS = 'SUCCESS';
+  } else if (result.installConfigurationReady === true
+    && result.providerRuntimeStatus === 'BLOCKED_PENDING_PHASE_2') {
+    summary.POST_INSTALL_STATUS = 'CONFIGURATION_READY_RUNTIME_BLOCKED';
   }
   return summary;
 }

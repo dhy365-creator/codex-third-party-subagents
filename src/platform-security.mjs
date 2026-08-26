@@ -169,7 +169,9 @@ export async function privatePathReady(target, {
   return false;
 }
 
-export async function assertNoReparsePath(target, root) {
+export async function assertNoReparsePath(target, root, {
+  platform = process.platform,
+} = {}) {
   const resolvedRoot = path.resolve(root);
   const resolvedTarget = path.resolve(target);
   const relative = path.relative(resolvedRoot, resolvedTarget);
@@ -181,14 +183,18 @@ export async function assertNoReparsePath(target, root) {
     throw new Error('approved root is not a real directory');
   }
   const rootCanonical = await fs.realpath(resolvedRoot);
-  const rootSame = process.platform === 'win32'
-    ? rootCanonical.toLowerCase() === resolvedRoot.toLowerCase()
-    : rootCanonical === resolvedRoot;
-  if (!rootSame) throw new Error('approved root traverses a reparse point');
+  if (platform === 'win32' && rootCanonical.toLowerCase() !== resolvedRoot.toLowerCase()) {
+    throw new Error('approved root traverses a reparse point');
+  }
+  if (!['darwin', 'win32'].includes(platform)) {
+    throw new Error('managed filesystem platform is unsupported');
+  }
   const components = relative ? relative.split(path.sep) : [];
   let current = resolvedRoot;
+  let expectedCanonical = rootCanonical;
   for (const component of components) {
     current = path.join(current, component);
+    expectedCanonical = path.join(expectedCanonical, component);
     let info;
     try { info = await fs.lstat(current); }
     catch (error) {
@@ -197,9 +203,9 @@ export async function assertNoReparsePath(target, root) {
     }
     if (info.isSymbolicLink()) throw new Error('managed path traverses a symlink or junction');
     const canonical = await fs.realpath(current);
-    const same = process.platform === 'win32'
+    const same = platform === 'win32'
       ? canonical.toLowerCase() === path.resolve(current).toLowerCase()
-      : canonical === path.resolve(current);
+      : canonical === expectedCanonical;
     if (!same) throw new Error('managed path traverses a reparse point');
   }
 }

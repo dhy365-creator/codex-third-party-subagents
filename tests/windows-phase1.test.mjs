@@ -20,6 +20,7 @@ import { runDoctor } from '../src/doctor.mjs';
 import { evaluateHostCompatibility } from '../src/host-compatibility.mjs';
 import { install } from '../src/installer.mjs';
 import {
+  assertNoReparsePath,
   captureWindowsSecurityDescriptor,
   privatePathReady,
 } from '../src/platform-security.mjs';
@@ -105,6 +106,33 @@ test('Windows credential adapter writes, retrieves, matches, deletes, and classi
   source.fill(0);
 });
 
+test('macOS canonical aliases remain confined to the canonical approved root', {
+  skip: process.platform !== 'darwin' && 'requires macOS canonical /var handling',
+}, async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-darwin-canonical-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  assert.notEqual(await fs.realpath(root), path.resolve(root));
+  await assert.doesNotReject(assertNoReparsePath(
+    path.join(root, 'managed', 'future-file'),
+    root,
+    { platform: 'darwin' },
+  ));
+});
+
+test('approved-root validation rejects a symlink that resolves outside the root', {
+  skip: process.platform !== 'darwin' && 'requires portable macOS symlink semantics',
+}, async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-darwin-root-'));
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-darwin-outside-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  t.after(() => fs.rm(outside, { recursive: true, force: true }));
+  await fs.symlink(outside, path.join(root, 'escape'));
+  await assert.rejects(
+    assertNoReparsePath(path.join(root, 'escape', 'managed-file'), root, { platform: 'darwin' }),
+    /symlink|junction|reparse/u,
+  );
+});
+
 async function windowsFixture(t) {
   const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-windows-phase1-'));
   t.after(() => fs.rm(homeDir, { recursive: true, force: true }));
@@ -161,8 +189,9 @@ test('Windows installer apply is ACL-backed, idempotent, verifiable, and safely 
     credentialReadyImpl: async () => true,
   });
   assert.equal(checked.configured, true);
-  assert.equal(checked.configurationReady, true);
-  assert.equal(checked.ready, true);
+  assert.equal(checked.installConfigurationReady, true);
+  assert.equal(checked.configurationReady, false);
+  assert.equal(checked.ready, false);
   assert.equal(checked.credentialBackend, 'windows-credential-manager');
   assert.equal(checked.runtimeVerified, false);
   assert.equal(checked.providerRuntimeReady, false);

@@ -179,6 +179,7 @@ function withTransportVerification(result, { env, host, options, providerPack })
     return {
       ...result,
       configured: false,
+      installConfigurationReady: false,
       configurationReady: false,
       ready: false,
       issues: [...result.issues, 'External Transport evidence failed strict validation'],
@@ -196,6 +197,7 @@ function incompleteResult({ env, warnings, issue, host, options }) {
     taskDelivered: state.taskDelivered,
     runtimeExecuted: false,
     runtimeVerified: false,
+    installConfigurationReady: false,
     configurationReady: false,
     ready: false,
     credentialReady: null,
@@ -427,8 +429,10 @@ export async function verify(options = {}) {
     && agentEvidence.every((evidence) => evidence.configured)
     && host.multiAgent === true;
   const windowsConfiguration = env.platform === 'win32';
+  const installConfigurationReady = configured && credentialReady === true;
   const configurationReady = configured
-    && (windowsConfiguration || currentHost.compatibility.configurationInstallAllowed === true);
+    && !windowsConfiguration
+    && currentHost.compatibility.configurationInstallAllowed === true;
   const result = {
     configured,
     discoverable,
@@ -436,6 +440,7 @@ export async function verify(options = {}) {
     taskDelivered: currentHost.taskDelivered,
     runtimeExecuted: false,
     runtimeVerified: false,
+    installConfigurationReady,
     configurationReady,
     ready: configurationReady && credentialReady === true,
     credentialReady,

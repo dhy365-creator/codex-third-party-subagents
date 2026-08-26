@@ -1,7 +1,10 @@
 import path from 'node:path';
 import { discoverEnvironment } from './environment.mjs';
 import { resolveProviderPack } from './provider-packs.mjs';
-import { restoreWindowsSecurityDescriptor } from './platform-security.mjs';
+import {
+  assertNoReparsePath,
+  restoreWindowsSecurityDescriptor,
+} from './platform-security.mjs';
 import {
   copyOwnerOnly,
   assertOwnerOnly,
@@ -148,23 +151,35 @@ function summarizeAction(action) {
 
 function plannedDirectoryActions(manifest, env) {
   const records = manifest.managedDirectories ?? [];
+  const kinds = new Map([
+    [env.runtimeDir, 'runtime-directory'],
+    [path.join(env.runtimeDir, 'credentials'), 'runtime-credentials-directory'],
+  ]);
+  const seen = new Set();
   return records.map((record) => {
-    if (record?.path !== env.runtimeDir || typeof record.preExisting !== 'boolean') {
+    const kind = kinds.get(record?.path);
+    if (!kind || seen.has(record.path) || typeof record.preExisting !== 'boolean') {
       throw new Error('install manifest contains an unmanaged directory');
     }
+    seen.add(record.path);
     return record.preExisting ? null : {
       type: 'remove-empty-directory',
-      record: { kind: 'runtime-directory', preExisting: false, path: record.path },
+      record: { kind, preExisting: false, path: record.path },
     };
-  }).filter(Boolean);
+  }).filter(Boolean).sort((left, right) => right.record.path.length - left.record.path.length);
 }
 
-async function removeIfEmpty(action) {
-  const info = await lstatIfExists(action.record.path);
+async function removeManagedDirectoryIfEmpty(action, env) {
+  const target = action.record.path;
+  if (!isPathInside(env.runtimeDir, target)) return;
+  const info = await lstatIfExists(target);
   if (!info) return;
   if (info.isSymbolicLink() || !info.isDirectory()) return;
   try {
-    await fs.rmdir(action.record.path);
+    // Revalidate every existing parent component immediately before cleanup.
+    // A renamed directory, symlink, or junction must never redirect removal.
+    await assertNoReparsePath(target, env.homeDir, { platform: env.platform });
+    await fs.rmdir(target);
   } catch {
     // Directory cleanup is best-effort after every managed file is already safe.
     // Preserve an unexpected or concurrently populated directory rather than
@@ -254,7 +269,7 @@ export async function uninstall(options = {}) {
       }
     }
   }
-  for (const action of directoryActions) await removeIfEmpty(action);
+  for (const action of directoryActions) await removeManagedDirectoryIfEmpty(action, env);
   await removeFileIfExists(env.manifestPath);
   return {
     dryRun: false,
