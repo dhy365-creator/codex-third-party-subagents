@@ -45,7 +45,7 @@ async function setup(t) {
     sentinel,
     options: {
       homeDir,
-      uid: process.getuid(),
+      uid: process.getuid?.(),
       username: 'fixture-user',
       nodePath: process.execPath,
       platform: 'darwin',

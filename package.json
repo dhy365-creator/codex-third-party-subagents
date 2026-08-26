@@ -56,7 +56,7 @@
     "macos"
   ],
   "scripts": {
-    "test": "node --test",
+    "test": "node scripts/test-suite.mjs",
     "install:dry": "node scripts/install.mjs",
     "doctor": "node scripts/doctor.mjs",
     "verify": "node scripts/verify.mjs",

@@ -3,8 +3,9 @@ import { catalogIsSafe } from './catalog.mjs';
 import { PRODUCTION_CATALOG_CONTRACT, validateProductionCatalog } from './production-catalog-contract.mjs';
 import { readExternalFlashEvidence } from './external-evidence-store.mjs';
 import { discoverEnvironment } from './environment.mjs';
-import { fs, lstatIfExists, sha256File } from './fs-utils.mjs';
-import { keychainReady } from './keychain.mjs';
+import { assertOwnerOnly, fs, lstatIfExists, sha256File } from './fs-utils.mjs';
+import { credentialBackend, credentialReady as checkCredentialReady } from './credentials.mjs';
+import { privatePathReady } from './platform-security.mjs';
 import { extractAgentsBlock } from './templates.mjs';
 import { inspectCustomAgentHost, validateCustomAgentToml } from './custom-agents.mjs';
 import {
@@ -28,6 +29,11 @@ const NATIVE_RUNTIME_FILES = [
   'fs-utils.mjs',
   'host-compatibility.mjs',
   'keychain.mjs',
+  'credentials.mjs',
+  'credentials/windows-credential-manager.mjs',
+  'credentials/windows-credential-helper.ps1',
+  'credential-runtime-blocker.mjs',
+  'platform-security.mjs',
   'preflight-runtime.mjs',
   'provider-packs.mjs',
   'routing.mjs',
@@ -115,9 +121,10 @@ function productionCatalogRequired(manifest, providerId, profile) {
 async function readManifest(env) {
   const info = await lstatIfExists(env.manifestPath);
   if (!info) return null;
-  if (info.isSymbolicLink() || !info.isFile() || (info.mode & 0o777) !== 0o600) {
+  if (info.isSymbolicLink() || !info.isFile()) {
     throw new Error('install manifest must be a regular owner-only file');
   }
+  await assertOwnerOnly(env.manifestPath, 0o600, env.uid);
   const manifest = JSON.parse(await fs.readFile(env.manifestPath, 'utf8'));
   if (manifest.schemaVersion !== 1 || manifest.environment?.homeDir !== env.homeDir) {
     throw new Error('install manifest is incompatible with this home directory');
@@ -172,6 +179,7 @@ function withTransportVerification(result, { env, host, options, providerPack })
     return {
       ...result,
       configured: false,
+      installConfigurationReady: false,
       configurationReady: false,
       ready: false,
       issues: [...result.issues, 'External Transport evidence failed strict validation'],
@@ -189,6 +197,7 @@ function incompleteResult({ env, warnings, issue, host, options }) {
     taskDelivered: state.taskDelivered,
     runtimeExecuted: false,
     runtimeVerified: false,
+    installConfigurationReady: false,
     configurationReady: false,
     ready: false,
     credentialReady: null,
@@ -290,8 +299,10 @@ export async function verify(options = {}) {
       issues.push(`managed file is missing or invalid: ${record.path}`);
       continue;
     }
-    if ((info.mode & 0o777) !== record.mode) {
-      issues.push(`managed file mode changed: ${record.path}`);
+    if (!await privatePathReady(record.path, {
+      kind: 'file', mode: record.mode, uid: env.uid, platform: env.platform,
+    })) {
+      issues.push(`managed file security changed: ${record.path}`);
     }
     if (record.kind === 'agents-marker') {
       try {
@@ -370,6 +381,10 @@ export async function verify(options = {}) {
     if (!config.hostCompatibility?.level) {
       issues.push('runtime config Host compatibility contract is missing');
     }
+    if (config.platform !== env.platform) issues.push('runtime config platform is invalid');
+    if (config.credentialBackend !== credentialBackend(env.platform)) {
+      issues.push('runtime config credential backend is invalid');
+    }
     const expectedDefaultRole = providerId === 'deepseek'
       ? profiles.find((profile) => profile.profile === 'flash')?.role ?? null
       : profiles[0]?.role ?? null;
@@ -383,7 +398,7 @@ export async function verify(options = {}) {
   let credentialReady = null;
   if (options.checkKeychain !== false) {
     try {
-      const check = options.keychainReadyImpl ?? keychainReady;
+      const check = options.credentialReadyImpl ?? options.keychainReadyImpl ?? checkCredentialReady;
       const keychainService = providerPack?.keychainService ?? (manifest.secretStorage?.service ?? null);
       if (!keychainService) {
         issues.push('cannot verify keychain service for this provider');
@@ -395,13 +410,13 @@ export async function verify(options = {}) {
           env: options.env ?? process.env,
           execFileImpl: options.execFileImpl,
         });
-        if (!credentialReady) issues.push(`provider keychain credential for ${providerId} is unavailable`);
+        if (!credentialReady) issues.push(`provider OS credential for ${providerId} is unavailable`);
       }
     } catch {
-      issues.push('provider keychain credential could not be checked');
+      issues.push('provider OS credential could not be checked');
     }
   } else {
-    warnings.push('Keychain credential check was skipped');
+    warnings.push('OS credential check was skipped');
   }
   warnings.push('No live Codex subagent task was run; runtime remains unverified');
   if (currentHost.issue) warnings.push(currentHost.issue);
@@ -413,7 +428,10 @@ export async function verify(options = {}) {
   const discoverable = profiles.length > 0
     && agentEvidence.every((evidence) => evidence.configured)
     && host.multiAgent === true;
+  const windowsConfiguration = env.platform === 'win32';
+  const installConfigurationReady = configured && credentialReady === true;
   const configurationReady = configured
+    && !windowsConfiguration
     && currentHost.compatibility.configurationInstallAllowed === true;
   const result = {
     configured,
@@ -422,9 +440,13 @@ export async function verify(options = {}) {
     taskDelivered: currentHost.taskDelivered,
     runtimeExecuted: false,
     runtimeVerified: false,
+    installConfigurationReady,
     configurationReady,
     ready: configurationReady && credentialReady === true,
     credentialReady,
+    credentialBackend: credentialBackend(env.platform),
+    providerRuntimeReady: false,
+    providerRuntimeStatus: windowsConfiguration ? 'BLOCKED_PENDING_PHASE_2' : 'NOT_VERIFIED',
     hostCompatibility: publicHostCompatibility(currentHost.compatibility),
     issues: [...issues, currentHost.issue].filter(Boolean),
     warnings,

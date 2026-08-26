@@ -8,7 +8,7 @@ import {
   createBridgeTask,
   hasArchivedBridgeTask,
 } from './bridge.mjs';
-import { keychainReady } from './keychain.mjs';
+import { credentialReady } from './credentials.mjs';
 import {
   DEFAULT_PROVIDER_ID,
   PACKAGE_NAME,
@@ -175,7 +175,7 @@ async function installedProviderReady(config, profile, deps = {}) {
   } catch {
     return false;
   }
-  const check = deps.keychainReadyImpl ?? keychainReady;
+  const check = deps.credentialReadyImpl ?? deps.keychainReadyImpl ?? credentialReady;
   return check({
     account: config.keychainAccount,
     service: providerPack.keychainService,
@@ -261,6 +261,7 @@ export async function runPreflight(input, config, deps = {}) {
   if (![ROLES.SPARK, ROLES.LUNA, ...profiles.map((profile) => profile.providerRole)].includes(input.requestedAgent)) {
     throw new Error('unknown requested agent');
   }
+  const windowsRuntimeBlocked = config.platform === 'win32';
   let host;
   try {
     const inspect = deps.inspectCustomAgentHostImpl ?? inspectCustomAgentHost;
@@ -302,14 +303,16 @@ export async function runPreflight(input, config, deps = {}) {
   } : null;
   const transportDecision = transportInput ? evaluateTransportPreflight(transportInput) : null;
   const transportBlocked = transportDecision && transportDecision.decision !== 'ALLOW';
-  if (compatibility.automaticRoutingAllowed !== true || transportBlocked) {
+  if (compatibility.automaticRoutingAllowed !== true || transportBlocked || windowsRuntimeBlocked) {
     const blockedState = {
       sparkRemaining: null,
       generalRemaining: null,
       providerReadyByRole: Object.fromEntries(profiles.map((profile) => [profile.providerRole, false])),
       bridgeBusy: true,
     };
-    const hostReason = `host cross-provider subagent ${compatibility.status.toLowerCase()}: ${compatibility.reason}`;
+    const hostReason = windowsRuntimeBlocked
+      ? 'Windows provider runtime is disabled pending Phase 2 validation'
+      : `host cross-provider subagent ${compatibility.status.toLowerCase()}: ${compatibility.reason}`;
     const transportReason = requestedTransport === TRANSPORTS.EXTERNAL_CODEX || transportBlocked
       ? transportDecision?.reason ?? hostReason
       : hostReason;
@@ -318,7 +321,7 @@ export async function runPreflight(input, config, deps = {}) {
         decision: 'deny',
         action: 'deny',
         chosenAgent: null,
-        reason: compatibility.automaticRoutingAllowed !== true
+        reason: (compatibility.automaticRoutingAllowed !== true || windowsRuntimeBlocked)
           && requestedTransport !== TRANSPORTS.EXTERNAL_CODEX
           ? hostReason
           : transportReason,
@@ -343,7 +346,7 @@ export async function runPreflight(input, config, deps = {}) {
     const blockedRoute = chooseRoute(blockedInput);
     const route = {
       ...blockedRoute,
-      reason: compatibility.automaticRoutingAllowed !== true && requestedTransport !== TRANSPORTS.EXTERNAL_CODEX
+      reason: (compatibility.automaticRoutingAllowed !== true || windowsRuntimeBlocked) && requestedTransport !== TRANSPORTS.EXTERNAL_CODEX
         ? hostReason
         : transportReason,
     };

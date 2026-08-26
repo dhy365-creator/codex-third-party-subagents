@@ -78,14 +78,14 @@ pack files, helper artifacts, manifest/backups, and one bounded AGENTS block.
 
 ### Is Windows supported?
 
-Not for runtime or apply in `v0.4.0-beta.3`. The public Release `.tgz` has
-been independently installed as an npm dependency on Windows; package-bin
-shims and installer dry-run passed. The installer intentionally fails closed
-before managed-file writes on Windows, and no secure Windows credential backend
-is implemented. The independent check used Codex CLI `0.141.0`, outside the
-exact Flash `0.149.0` boundary, so it does not establish Windows Provider
-runtime support. Do not use plaintext `.env` files or `DEEPSEEK_API_KEY`
-environment variables as a workaround.
+The public `v0.4.0-beta.3` artifact remains macOS-only for apply/runtime.
+The current Windows Phase 1 source candidate adds a secure configuration
+foundation using the current user's Windows Credential Manager and owner-only
+ACLs. Configuration apply can complete, but Provider runtime remains
+`BLOCKED_PENDING_PHASE_2`, `runtimeVerified=false`, and External default-off.
+This is not Windows Provider runtime support. Do not use plaintext `.env`
+files, secret files, or persistent `DEEPSEEK_API_KEY` environment variables
+as a workaround.
 
 ### Which providers are currently supported?
 

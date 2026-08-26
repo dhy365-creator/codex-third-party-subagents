@@ -53,7 +53,7 @@ async function setup(t) {
   };
   const options = {
     homeDir,
-    uid: process.getuid(),
+    uid: process.getuid?.(),
     username: 'fixture-user',
     nodePath: process.execPath,
     platform: 'darwin',
@@ -146,6 +146,87 @@ test('dry-run writes nothing, apply is idempotent, verify is honest, and uninsta
   await assert.rejects(fs.stat(applied.environment.agentPath), /ENOENT/);
   await assert.rejects(fs.stat(applied.manifestPath), /ENOENT/);
   await assert.rejects(fs.stat(applied.environment.runtimeDir), /ENOENT/);
+});
+
+test('uninstall preserves a pre-existing nested managed directory', async (t) => {
+  const fixture = await setup(t);
+  const credentialsDir = path.join(
+    fixture.codexDir,
+    'lib',
+    'codex-third-party-workers',
+    'credentials',
+  );
+  await fs.mkdir(credentialsDir, { recursive: true });
+
+  const applied = await install({ ...fixture.options, apply: true });
+  const manifest = JSON.parse(await fs.readFile(applied.manifestPath, 'utf8'));
+  assert.deepEqual(
+    manifest.managedDirectories.find((record) => record.path === credentialsDir),
+    { path: credentialsDir, preExisting: true },
+  );
+
+  const removed = await uninstall({ ...fixture.options, apply: true });
+  assert.equal(removed.applied, true);
+  assert.deepEqual(await fs.readdir(credentialsDir), []);
+});
+
+test('uninstall never recursively removes unmanaged nested runtime contents', async (t) => {
+  const fixture = await setup(t);
+  const applied = await install({ ...fixture.options, apply: true });
+  const credentialsDir = path.join(applied.environment.runtimeDir, 'credentials');
+  const unmanaged = path.join(credentialsDir, 'user-owned.txt');
+  await fs.writeFile(unmanaged, 'preserve me');
+
+  const removed = await uninstall({ ...fixture.options, apply: true });
+  assert.equal(removed.applied, true);
+  assert.equal(await fs.readFile(unmanaged, 'utf8'), 'preserve me');
+  assert.equal((await fs.stat(credentialsDir)).isDirectory(), true);
+});
+
+test('uninstall rejects an unmanaged directory record before removing files', async (t) => {
+  const fixture = await setup(t);
+  const applied = await install({ ...fixture.options, apply: true });
+  const manifest = JSON.parse(await fs.readFile(applied.manifestPath, 'utf8'));
+  manifest.managedDirectories.push({
+    path: path.join(fixture.homeDir, 'outside-managed-root'),
+    preExisting: false,
+  });
+  await fs.writeFile(applied.manifestPath, JSON.stringify(manifest));
+
+  const removed = await uninstall({ ...fixture.options, apply: true });
+  assert.equal(removed.applied, false);
+  assert.match(removed.conflicts.join('\n'), /unmanaged directory/u);
+  assert.equal((await fs.stat(applied.environment.agentPath)).isFile(), true);
+});
+
+test('uninstall rejects inconsistent duplicate directory metadata before cleanup', async (t) => {
+  const fixture = await setup(t);
+  const applied = await install({ ...fixture.options, apply: true });
+  const manifest = JSON.parse(await fs.readFile(applied.manifestPath, 'utf8'));
+  manifest.managedDirectories.push({ ...manifest.managedDirectories[0] });
+  await fs.writeFile(applied.manifestPath, JSON.stringify(manifest));
+
+  const removed = await uninstall({ ...fixture.options, apply: true });
+  assert.equal(removed.applied, false);
+  assert.match(removed.conflicts.join('\n'), /unmanaged directory/u);
+  assert.equal((await fs.stat(applied.environment.runtimeDir)).isDirectory(), true);
+});
+
+test('uninstall revalidates changed parent mappings immediately before directory cleanup', async (t) => {
+  const fixture = await setup(t);
+  const applied = await install({ ...fixture.options, apply: true });
+  const runtimeDir = applied.environment.runtimeDir;
+  const relocated = path.join(fixture.homeDir, 'relocated-runtime');
+  const manifest = JSON.parse(await fs.readFile(applied.manifestPath, 'utf8'));
+  manifest.managedFiles = [];
+  await fs.writeFile(applied.manifestPath, JSON.stringify(manifest));
+  await fs.rename(runtimeDir, relocated);
+  await fs.symlink(relocated, runtimeDir);
+
+  const removed = await uninstall({ ...fixture.options, apply: true });
+  assert.equal(removed.applied, true);
+  assert.equal((await fs.lstat(runtimeDir)).isSymbolicLink(), true);
+  assert.equal((await fs.stat(path.join(relocated, 'credentials'))).isDirectory(), true);
 });
 
 test('installer allows blocked-Host analysis but fails before an active installation', async (t) => {

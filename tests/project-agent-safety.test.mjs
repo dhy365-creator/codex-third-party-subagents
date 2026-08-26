@@ -65,7 +65,7 @@ test('project layer inspection covers ancestors above nested Git and excludes us
   const result = await inspectProjectCustomAgentLayers({ cwd: nested, homeDir });
   assert.equal(result.safe, false);
   assert.equal(result.definitions.length, 1);
-  assert.match(result.definitions[0], /workspace\/\.codex\/agents\/shadow\.toml$/);
+  assert.match(result.definitions[0], /workspace[/\\]\.codex[/\\]agents[/\\]shadow\.toml$/u);
 });
 
 test('project layer inspection fails closed on a symlinked agent directory', async (t) => {

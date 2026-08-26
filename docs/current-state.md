@@ -2,6 +2,44 @@
 
 最后更新：2026-08-26
 
+## Windows Support Phase 1 跨平台修复候选（2026-08-26）
+
+- 基于被阻断候选 `fcd268cad4c368b8f674b3b7f0ee1bf87e354f21`，独立修复分支已完成
+  macOS canonical alias、Windows readiness/status、耐久文档与嵌套 managed-directory
+  uninstall ownership contract 的本地修复。
+- macOS 对合法 `/var -> /private/var` canonical root 建立后按 canonical root 约束后代；
+  Windows 继续对 root 与各现存 component 执行严格 junction/reparse 等价检查，symlink 与
+  approved-root escape 仍 fail closed。
+- Manifest 显式记录 `runtimeDir` 与 `runtimeDir/credentials` 的 `preExisting`
+  ownership；卸载只按深度顺序删除 installer-owned 空目录，并在每次清理前重新验证目标及
+  全部现存父组件仍映射到预期 managed layout。预存目录、映射变化目录与任何包含未知内容的
+  目录均保留，不递归删除。
+- Windows Phase 1 仅允许 `installConfigurationReady` 表示安全配置与 OS credential
+  就绪；`configurationReady=false`、`ready=false`、
+  `providerRuntimeStatus=BLOCKED_PENDING_PHASE_2`、`runtimeVerified=false`，
+  CLI 不再输出通用 `SUCCESS`。
+- 聚焦测试 `35 total / 32 pass / 0 fail / 3 native-Windows skip`；完整 macOS
+  `npm test` 为 `233 total / 230 pass / 0 fail / 3 native-Windows skip`。
+  Native Windows ACL、junction、Credential Manager 与 security-descriptor restore
+  仍需在新的 immutable candidate 上刷新，不能由本机结果代替。
+
+## Windows Support Phase 1 本地候选（2026-08-26）
+
+- 基于 `e5926e9c4f01cddc2a1a7157348e3bd828a83b48` 建立 Windows 本地候选：安装器允许
+  Windows 配置写入，使用 Windows Credential Manager 与当前用户 owner-only ACL，不使用
+  `.env`、长期环境变量或明文文件保存 Provider credential。
+- Credential Manager helper 通过一次性认证的随机 named pipe 传输 secret；Provider secret
+  不进入 argv、环境变量、文件、stdout 或 stderr。合成凭据 write/read/match/delete/read-after-delete
+  已在 Windows 11 原生后端通过并完成清理。
+- Installer dry-run/apply/second apply、Doctor、Verifier、uninstall/second uninstall 已在隔离
+  Windows fixture 通过；卸载会恢复安装前已有文件的原始 Windows security descriptor；
+  真实用户 Codex config 哈希、长度和时间戳保持不变。
+- Windows 配置可就绪，但 Provider runtime 明确保持 `BLOCKED_PENDING_PHASE_2`，
+  `runtimeVerified=false`；External 保持 default-off，本任务 Provider requests 为 `0`。
+- 原始候选的跨平台复查发现 macOS canonical path 回归并阻断集成；上述独立修复候选已消除
+  该回归。Windows 测试入口继续显式跳过依赖 macOS POSIX 权限、进程和 External runtime
+  contract 的 Phase 2 suites，不将它们伪装成 Windows runtime 证据。
+
 ## Windows Release-artifact independent clean-install evidence（2026-08-26）
 
 - `WINDOWS RELEASE-ARTIFACT CLEAN INSTALL E2E = BLOCKED`：公开

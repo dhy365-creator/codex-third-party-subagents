@@ -2,7 +2,12 @@ import path from 'node:path';
 import { discoverEnvironment } from './environment.mjs';
 import { resolveProviderPack } from './provider-packs.mjs';
 import {
+  assertNoReparsePath,
+  restoreWindowsSecurityDescriptor,
+} from './platform-security.mjs';
+import {
   copyOwnerOnly,
+  assertOwnerOnly,
   fs,
   isPathInside,
   lstatIfExists,
@@ -21,6 +26,11 @@ const RUNTIME_FILES = [
   'fs-utils.mjs',
   'host-compatibility.mjs',
   'keychain.mjs',
+  'credentials.mjs',
+  'credentials/windows-credential-manager.mjs',
+  'credentials/windows-credential-helper.ps1',
+  'credential-runtime-blocker.mjs',
+  'platform-security.mjs',
   'preflight-runtime.mjs',
   'provider-packs.mjs',
   'routing.mjs',
@@ -64,10 +74,11 @@ function profilesFromManifest(manifest, env) {
 
 async function loadManifest(env) {
   const info = await lstatIfExists(env.manifestPath);
-  if (!info) throw new Error('install manifest is missing');
-  if (info.isSymbolicLink() || !info.isFile() || (info.mode & 0o777) !== 0o600) {
+  if (!info) return null;
+  if (info.isSymbolicLink() || !info.isFile()) {
     throw new Error('install manifest must be a regular owner-only file');
   }
+  await assertOwnerOnly(env.manifestPath, 0o600, env.uid);
   const manifest = JSON.parse(await fs.readFile(env.manifestPath, 'utf8'));
   if (manifest.schemaVersion !== 1 || manifest.environment?.homeDir !== env.homeDir) {
     throw new Error('install manifest is incompatible with this home directory');
@@ -92,13 +103,20 @@ async function planRegular(record, env) {
     if (!backupInfo || backupInfo.isSymbolicLink() || !backupInfo.isFile()) {
       throw new Error('backup is missing or invalid');
     }
-    if ((backupInfo.mode & 0o777) !== 0o600 || await sha256File(record.backup.path) !== record.backup.hash) {
+    try { await assertOwnerOnly(record.backup.path, 0o600, env.uid); }
+    catch { throw new Error('backup failed integrity validation'); }
+    if (await sha256File(record.backup.path) !== record.backup.hash) {
       throw new Error('backup failed integrity validation');
     }
     if (!Number.isInteger(record.backup.originalMode)
       || record.backup.originalMode < 0
       || record.backup.originalMode > 0o777) {
       throw new Error('backup mode is invalid');
+    }
+    if (env.platform === 'win32'
+      && (typeof record.backup.windowsSecurityDescriptor !== 'string'
+        || !record.backup.windowsSecurityDescriptor.startsWith('O:'))) {
+      throw new Error('backup Windows security descriptor is invalid');
     }
     return { type: 'restore', record };
   }
@@ -133,23 +151,35 @@ function summarizeAction(action) {
 
 function plannedDirectoryActions(manifest, env) {
   const records = manifest.managedDirectories ?? [];
+  const kinds = new Map([
+    [env.runtimeDir, 'runtime-directory'],
+    [path.join(env.runtimeDir, 'credentials'), 'runtime-credentials-directory'],
+  ]);
+  const seen = new Set();
   return records.map((record) => {
-    if (record?.path !== env.runtimeDir || typeof record.preExisting !== 'boolean') {
+    const kind = kinds.get(record?.path);
+    if (!kind || seen.has(record.path) || typeof record.preExisting !== 'boolean') {
       throw new Error('install manifest contains an unmanaged directory');
     }
+    seen.add(record.path);
     return record.preExisting ? null : {
       type: 'remove-empty-directory',
-      record: { kind: 'runtime-directory', preExisting: false, path: record.path },
+      record: { kind, preExisting: false, path: record.path },
     };
-  }).filter(Boolean);
+  }).filter(Boolean).sort((left, right) => right.record.path.length - left.record.path.length);
 }
 
-async function removeIfEmpty(action) {
-  const info = await lstatIfExists(action.record.path);
+async function removeManagedDirectoryIfEmpty(action, env) {
+  const target = action.record.path;
+  if (!isPathInside(env.runtimeDir, target)) return;
+  const info = await lstatIfExists(target);
   if (!info) return;
   if (info.isSymbolicLink() || !info.isDirectory()) return;
   try {
-    await fs.rmdir(action.record.path);
+    // Revalidate every existing parent component immediately before cleanup.
+    // A renamed directory, symlink, or junction must never redirect removal.
+    await assertNoReparsePath(target, env.homeDir, { platform: env.platform });
+    await fs.rmdir(target);
   } catch {
     // Directory cleanup is best-effort after every managed file is already safe.
     // Preserve an unexpected or concurrently populated directory rather than
@@ -164,6 +194,17 @@ export async function uninstall(options = {}) {
   let env = discoverEnvironment({ ...options, env: options.env ?? process.env });
   const dryRun = options.apply !== true;
   const manifest = await loadManifest(env);
+  if (!manifest) {
+    return {
+      dryRun,
+      applied: false,
+      alreadyUninstalled: true,
+      actions: [],
+      conflicts: [],
+      keychainRemoved: false,
+      manifestRemoved: false,
+    };
+  }
   const providerId = manifest.options?.providerId ?? manifest.environment?.providerId;
   if (!providerId) throw new Error('install manifest provider is missing');
   if (options.provider && String(options.provider).trim().toLowerCase() !== providerId) {
@@ -209,12 +250,26 @@ export async function uninstall(options = {}) {
       await removeFileIfExists(action.record.path);
     } else if (action.type === 'restore') {
       await copyOwnerOnly(action.record.backup.path, action.record.path);
-      await fs.chmod(action.record.path, action.record.backup.originalMode);
+      if (process.platform === 'darwin') await fs.chmod(action.record.path, action.record.backup.originalMode);
+      if (env.platform === 'win32') {
+        await restoreWindowsSecurityDescriptor(
+          action.record.path,
+          action.record.backup.windowsSecurityDescriptor,
+          { env: options.env ?? process.env },
+        );
+      }
     } else if (action.type === 'rewrite-agents') {
       await writeFileIfChanged(action.record.path, action.text, { mode: action.mode });
+      if (env.platform === 'win32' && action.record.backup?.windowsSecurityDescriptor) {
+        await restoreWindowsSecurityDescriptor(
+          action.record.path,
+          action.record.backup.windowsSecurityDescriptor,
+          { env: options.env ?? process.env },
+        );
+      }
     }
   }
-  for (const action of directoryActions) await removeIfEmpty(action);
+  for (const action of directoryActions) await removeManagedDirectoryIfEmpty(action, env);
   await removeFileIfExists(env.manifestPath);
   return {
     dryRun: false,

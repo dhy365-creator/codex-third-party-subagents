@@ -2,6 +2,10 @@ import fs from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import {
+  privatePathReady,
+  secureManagedPath,
+} from './platform-security.mjs';
 
 export const INSTALL_VERSION = '0.4.0-beta.3';
 
@@ -37,7 +41,9 @@ export async function ensureDir(dirPath, mode = 0o700, { enforceMode = true } = 
   // New managed directories need an explicit mode because mkdir honors umask.
   // Existing parent directories retain their user-selected mode unless a caller
   // explicitly owns that directory's permission boundary.
-  if (enforceMode || created) await fs.chmod(dirPath, mode);
+  if (enforceMode || created) {
+    await secureManagedPath(dirPath, { kind: 'directory', mode });
+  }
 }
 
 export async function writeFileIfChanged(filePath, contents, { mode = 0o600 } = {}) {
@@ -46,7 +52,8 @@ export async function writeFileIfChanged(filePath, contents, { mode = 0o600 } = 
   if (existing) {
     if (!existing.isFile()) throw new Error(`managed path is not a regular file: ${filePath}`);
     const current = await fs.readFile(filePath);
-    if (Buffer.compare(current, data) === 0 && (existing.mode & 0o777) === mode) {
+    const secure = await privatePathReady(filePath, { kind: 'file', mode });
+    if (Buffer.compare(current, data) === 0 && secure) {
       return { changed: false, hash: sha256(data), mode };
     }
   }
@@ -59,7 +66,7 @@ export async function writeFileIfChanged(filePath, contents, { mode = 0o600 } = 
   } finally {
     await handle.close();
   }
-  await fs.chmod(tempPath, mode);
+  await secureManagedPath(tempPath, { kind: 'file', mode });
   await fs.rename(tempPath, filePath);
   return { changed: true, hash: sha256(data), mode };
 }
@@ -75,7 +82,7 @@ export async function copyOwnerOnly(sourcePath, destinationPath) {
   } finally {
     await handle.close();
   }
-  await fs.chmod(tempPath, 0o600);
+  await secureManagedPath(tempPath, { kind: 'file', mode: 0o600 });
   await fs.rename(tempPath, destinationPath);
   return sha256(data);
 }
@@ -92,12 +99,10 @@ export async function removeFileIfExists(filePath) {
 export async function assertOwnerOnly(filePath, expectedMode, expectedUid = process.getuid?.()) {
   const info = await fs.lstat(filePath);
   if (info.isSymbolicLink()) throw new Error(`symlink not allowed: ${filePath}`);
-  if (expectedMode != null && (info.mode & 0o777) !== expectedMode) {
-    throw new Error(`unexpected mode for ${filePath}: ${(info.mode & 0o777).toString(8)}`);
-  }
-  if (expectedUid != null && info.uid !== expectedUid) {
-    throw new Error(`unexpected owner for ${filePath}`);
-  }
+  const kind = info.isDirectory() ? 'directory' : info.isFile() ? 'file' : null;
+  if (!kind || !await privatePathReady(filePath, {
+    kind, mode: expectedMode, uid: expectedUid,
+  })) throw new Error(`owner-only security is not established for ${filePath}`);
   return info;
 }
 

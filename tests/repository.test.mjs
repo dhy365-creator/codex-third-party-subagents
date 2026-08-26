@@ -84,6 +84,25 @@ test('post-install success signal appears only after complete local verification
     warnings: [],
   });
   assert.equal(hostBlocked.POST_INSTALL_STATUS, undefined);
+
+  const windowsPhase1 = summarizeVerify({
+    configured: true,
+    installConfigurationReady: true,
+    configurationReady: false,
+    ready: false,
+    credentialReady: true,
+    providerRuntimeReady: false,
+    providerRuntimeStatus: 'BLOCKED_PENDING_PHASE_2',
+    runtimeVerified: false,
+    issues: [],
+    warnings: ['Windows provider runtime is disabled pending Phase 2 validation'],
+  });
+  assert.equal(windowsPhase1.installConfigurationReady, true);
+  assert.equal(windowsPhase1.configurationReady, false);
+  assert.equal(windowsPhase1.ready, false);
+  assert.equal(windowsPhase1.providerRuntimeReady, false);
+  assert.equal(windowsPhase1.providerRuntimeStatus, 'BLOCKED_PENDING_PHASE_2');
+  assert.equal(windowsPhase1.POST_INSTALL_STATUS, 'CONFIGURATION_READY_RUNTIME_BLOCKED');
 });
 
 test('optional Star policy is agent-only, consent-based, and non-blocking', async () => {

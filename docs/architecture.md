@@ -7,7 +7,8 @@
   second and third built-in packs.
   Additional providers are added as reviewed built-in definitions with tests;
   arbitrary remote pack manifests are intentionally not loaded.
-- macOS Keychain is the only credential source.
+- macOS uses Keychain and the Windows Phase 1 source candidate uses the current
+  user's Windows Credential Manager. No plaintext fallback is supported.
 - Dry-run is the default; file mutation requires `--apply`.
 - Official provider metadata is acquired at install time, never vendored here.
 - A Custom Agent's Host identity comes from its official TOML `name` field,
@@ -60,14 +61,14 @@ unknown.
 before installation. It checks the platform, Node.js, recognizable Codex state,
 Native multi-agent mode and cross-provider Host compatibility, expected name/model/provider,
 duplicate or project-scope identities, legacy migration state, owner-only
-permissions, Keychain item presence, OpenAI fallback hints, installed-manifest
+permissions, OS credential presence, OpenAI fallback hints, installed-manifest
 state, and prerequisites for the existing verifier. Phase 2 also reports the
 External module, disabled feature gate, exact `codex exec` prerequisite,
 isolated runtime-root state, permission profile, provider tuple, credential
 readiness, maintainer evidence, local-installation evidence, and eligibility
 without creating a runtime root or launching a child.
 
-Doctor performs no writes, never asks Keychain to return a credential value,
+Doctor performs no writes, never asks the OS credential backend to return a credential value,
 does not print private paths, and makes no network or paid provider API call.
 An uninstalled worker is reported separately from a blocker such as an invalid
 provider, unsupported model, missing credential, or incompatible platform.
@@ -79,7 +80,10 @@ provider, unsupported model, missing credential, or incompatible platform.
 `~/.codex/agents/<provider>_worker.toml` is a user-scoped official Custom
 Agent definition. Its TOML `name` is the Host identity; its
 `description` and `developer_instructions` are required. It declares the
-provider-pack model/provider block and command-backed Keychain authentication.
+provider-pack model/provider block and command-backed OS credential authentication.
+The Windows Phase 1 definition uses a fixed runtime blocker instead of enabling
+Provider execution; Windows Credential Manager currently proves only the secure
+configuration foundation.
 Those role-level provider values take effect only on a compatible Host; Codex
 `0.149.0` ignores them and inherits the parent provider. The installer never
 writes `~/.codex/config.toml` or project
@@ -112,7 +116,7 @@ A local catalog or saved setup script can be used for offline installation.
 contract. A blocked or unknown Host returns an OpenAI route or deny before
 provider readiness checks or bridge creation. On a historically verified Host,
 it then reads Codex rate limits through the local Codex app-server, verifies
-installed provider files and the Keychain item, and applies the routing policy.
+installed provider files and the selected OS credential backend, and applies the routing policy.
 Spark entitlement and live Spark remaining quota are separate inputs. If quota
 lookup fails, routing stays on an OpenAI worker.
 
@@ -190,8 +194,13 @@ Native `ALLOW` may proceed to the existing bridge.
 - `providerResolved`: the third-party provider has attributable runtime evidence.
 - `taskDelivered`: the intended task reached that provider child.
 - `runtimeExecuted`: a live provider child task executed.
-- `configurationReady`: local configuration and Host compatibility both pass.
-- `ready`: `configurationReady` plus a verified Keychain credential.
+- `installConfigurationReady`: local managed configuration and the selected OS
+  credential check pass. On Windows Phase 1 this can be true while Provider
+  runtime remains blocked.
+- `configurationReady`: local configuration and Host compatibility both pass;
+  it remains false on Windows while runtime is `BLOCKED_PENDING_PHASE_2`.
+- `ready`: `configurationReady` plus a verified OS credential. It never
+  represents Windows Phase 1 as generally runtime-ready.
 - `agentEvidence`: per agent/provider/model local configuration checks with
   a timestamp; it intentionally has no Host runtime metadata.
 - `runtimeVerified`: the top-level Native state is not promoted by static
@@ -199,6 +208,9 @@ Native `ALLOW` may proceed to the existing bridge.
   only inside `transports.external`; result self-report and maintainer evidence
   cannot set it, and the disabled gate keeps External `configurationReady` and
   `ready` false.
+- `providerRuntimeReady` / `providerRuntimeStatus`: explicit runtime boundary.
+  Windows Phase 1 reports `false` / `BLOCKED_PENDING_PHASE_2` and
+  `runtimeVerified=false`.
 - `userAccepted`: separate from both local checks and runtime execution.
 
 Verifier output now includes `transport`, `providerId`, `model`,

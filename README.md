@@ -12,7 +12,8 @@ review**.
 
 ![Codex Third-Party Subagents architecture](assets/hero-social-preview.png)
 
-> Version line `0.4.0-beta.3`. Unofficial, macOS-only, and not endorsed by
+> Version line `0.4.0-beta.3`. Unofficial; Provider runtime is macOS-only, and
+> Windows source support is configuration-only. This project is not endorsed by
 > OpenAI, DeepSeek, MiniMax, or Alibaba Cloud.
 
 ## Codex stays the main agent
@@ -50,12 +51,11 @@ contract, and version matrix in [Host compatibility](docs/host-compatibility.md)
 - **macOS:** `v0.4.0-beta.3` DeepSeek V4 Flash Public Beta has a packaged
   clean-install maintainer E2E verified on the documented exact Codex CLI
   `0.149.0` boundary. External use remains explicit and default-off.
-- **Windows:** the official Release `.tgz` installs as an npm dependency, its
-  package-bin shims work, and installer dry-run has been independently verified.
-  Runtime/apply is not supported: this release intentionally fails closed on
-  Windows before managed-file writes. A secure Windows credential backend is
-  not implemented. Do not use plaintext `.env` files or `DEEPSEEK_API_KEY`
-  environment variables as a workaround.
+- **Windows:** the official Release `.tgz` remains dry-run-only. This source
+  candidate adds Windows Credential Manager, owner-only ACL-backed configuration
+  installation, Doctor/Verifier configuration semantics, and safe uninstall.
+  Provider-backed runtime remains blocked pending Phase 2 validation; do not use
+  plaintext `.env` files or `DEEPSEEK_API_KEY` as a workaround.
 
 ### What Codex Provides Natively
 

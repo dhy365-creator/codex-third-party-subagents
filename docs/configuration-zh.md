@@ -1,8 +1,10 @@
 # 配置指南
 
 **Codex Third-Party Subagents（Codex 第三方子代理）** 是第三方模型有界交接的
-version-scoped 兼容、安装与验证层，不替换主线程 OpenAI 模型。本版本为非官方、
-macOS-only、公开 beta；GitHub/package slug 为 `codex-third-party-subagents`。
+version-scoped 兼容、安装与验证层，不替换主线程 OpenAI 模型。当前公开
+`v0.4.0-beta.3` 仍是非官方、macOS-only beta；当前源码中的 Windows Phase 1
+候选仅开放安全凭据与配置基础，不开放 Provider runtime。GitHub/package slug 为
+`codex-third-party-subagents`。
 
 ## 安装前确认
 
@@ -16,11 +18,11 @@ analysis，不能 `--apply` 或创建 active provider bridge。
 普通 External registry、factory、runtime route 或自动 fallback。实际 E2E 仍需独立的
 显式付费授权和全部三个执行开关。见 [Flash Beta 干净安装指南](flash-beta-clean-install.md)。
 
-`v0.4.0-beta.3` 的正式 Release artifact 已在 Windows 上验证可作为 npm 依赖安装，
-package-bin shim 和 installer dry-run 也通过；这不表示 Windows runtime/apply 已支持。
-当前版本会在 Windows 上于写入前 fail closed，且尚无 Windows 安全凭据后端。不要用明文
-`.env` 或长期 `DEEPSEEK_API_KEY` 环境变量绕过凭据边界；Provider-backed Windows 执行需等待
-受支持的安全后端和完整 Windows E2E。
+`v0.4.0-beta.3` 的正式 Release artifact 仍只提供 Windows npm 安装与 dry-run 证据。
+当前源码 Phase 1 候选新增 Windows Credential Manager、owner-only ACL 与配置
+`--apply` 基础，但 Provider runtime 明确保持 `BLOCKED_PENDING_PHASE_2`，
+`runtimeVerified=false`，External 保持 default-off。不要用明文 `.env`、长期
+`DEEPSEEK_API_KEY` 环境变量或 secret 文件绕过凭据边界。
 
 安装器会要求确认：
 
@@ -39,7 +41,9 @@ package-bin shim 和 installer dry-run 也通过；这不表示 Windows runtime/
 
 套餐只用于生成默认值。每次路由仍读取实际额度；不能仅凭“Pro”推断 Spark 仍有剩余。
 
-## 1. 将 API key 写入 macOS Keychain
+## 1. 配置安全的 OS credential
+
+macOS 继续使用 Keychain：
 
 在系统终端执行：
 
@@ -55,6 +59,10 @@ package-bin shim 和 installer dry-run 也通过；这不表示 Windows runtime/
 ```
 
 `-w` 放在命令末尾时，由 macOS 安全提示输入内容，不会把 key 放进普通命令参数或 shell 历史。安装器没有 `--api-key` 参数，只检查当前 Pack 对应的 Keychain 项是否存在。
+
+Windows Phase 1 源码候选使用当前用户的 Windows Credential Manager，并通过受认证的
+本地 named pipe 调用固定 helper；credential 不进入 argv、文件、stdout 或 stderr。
+这只是配置基础，不是 Provider runtime 可用性证明。
 
 ## 2. 先做 dry-run
 
@@ -115,8 +123,9 @@ Flash 的自动替换或回退。
 --apply
 ```
 
-以上条件不改变当前平台边界：本版本的正式写入/runtime 路径仅支持 macOS。Windows 上即使
-package 安装和 dry-run 成功，也不要追加 `--apply`。
+公开 `v0.4.0-beta.3` 的正式写入/runtime 路径仍仅支持 macOS。当前源码 Phase 1
+候选允许 Windows 安全配置 `--apply`，但生成的 Windows Provider command 固定
+fail closed，不能执行 Provider 任务；不得把配置写入成功解释为 runtime 可用。
 
 写入范围仅包括：
 
@@ -139,8 +148,12 @@ node scripts/verify.mjs
 
 `configured: true` 只表示本地文件、权限、hash、catalog 与已请求的凭据检查正确。
 `discoverable`、`providerResolved`、`taskDelivered`、`runtimeExecuted` 与
-`runtimeVerified` 分开报告；`configurationReady` 还要求 Host 兼容，`ready` 再要求
-Keychain 检查通过。
+`runtimeVerified` 分开报告。`installConfigurationReady` 只表示受管配置与 OS
+credential 检查通过；`configurationReady` 还要求可用的 Host/runtime 边界，
+`ready` 再要求 credential 检查通过。Windows Phase 1 即使
+`installConfigurationReady=true`，也保持 `configurationReady=false`、
+`ready=false`、`providerRuntimeStatus=BLOCKED_PENDING_PHASE_2` 和
+`runtimeVerified=false`。
 `runtimeVerified` 仍会是 `false`：当前验证器不摄取或独立接受外部运行记录。真实文本/
 代码子任务及主线程复核必须作为单独、按 Agent/Model 归因的证据记录。
 

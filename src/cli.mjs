@@ -128,7 +128,7 @@ function installHelp() {
 }
 
 function uninstallHelp() {
-  return 'Usage: node scripts/uninstall.mjs [--provider <provider-pack-id>] [--home-dir <absolute-user-home>] [--apply]\nDry-run is the default. Uninstall removes every installed profile for that provider; Keychain credentials and bridge archives are never removed.\n';
+  return 'Usage: node scripts/uninstall.mjs [--provider <provider-pack-id>] [--home-dir <absolute-user-home>] [--apply]\nDry-run is the default. Uninstall removes every installed profile for that provider; OS credentials and bridge archives are never removed.\n';
 }
 
 function summarizeInstall(result) {
@@ -157,9 +157,12 @@ export function summarizeVerify(result) {
     taskDelivered: result.taskDelivered,
     runtimeExecuted: result.runtimeExecuted,
     runtimeVerified: result.runtimeVerified,
+    installConfigurationReady: result.installConfigurationReady,
     configurationReady: result.configurationReady,
     ready: result.ready,
     credentialReady: result.credentialReady,
+    providerRuntimeReady: result.providerRuntimeReady,
+    providerRuntimeStatus: result.providerRuntimeStatus,
     hostCompatibility: result.hostCompatibility,
     transport: result.transport,
     providerId: result.providerId,
@@ -177,6 +180,9 @@ export function summarizeVerify(result) {
   };
   if (result.ready === true && result.credentialReady === true) {
     summary.POST_INSTALL_STATUS = 'SUCCESS';
+  } else if (result.installConfigurationReady === true
+    && result.providerRuntimeStatus === 'BLOCKED_PENDING_PHASE_2') {
+    summary.POST_INSTALL_STATUS = 'CONFIGURATION_READY_RUNTIME_BLOCKED';
   }
   return summary;
 }
