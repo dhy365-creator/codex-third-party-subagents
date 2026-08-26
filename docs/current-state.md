@@ -1,6 +1,26 @@
 # 当前状态
 
-最后更新：2026-08-25
+最后更新：2026-08-26
+
+## Windows Release-artifact independent clean-install evidence（2026-08-26）
+
+- `WINDOWS RELEASE-ARTIFACT CLEAN INSTALL E2E = BLOCKED`：公开
+  `v0.4.0-beta.3` 的 `.tgz` 在 Windows 上完成 SHA-256 完整性核对，作为 npm 依赖安装
+  通过，Windows package-bin shim 可用，安装器 dry-run 通过。
+- 两次 installer `--apply` 均在托管文件写入前安全阻断，返回
+  `codex-third-party-subagents is macOS-only (darwin)`；隔离 fixture 在两次尝试后仍为空。
+  这表示 Windows runtime/apply 尚不支持，不是 Release artifact 安装失败。
+- 当前凭据实现是 macOS Keychain command-backed 路径（`/usr/bin/security`）；Windows
+  Credential Manager、DPAPI 或其他受支持的安全凭据后端尚未实现。不要用明文 `.env` 或
+  长期 `DEEPSEEK_API_KEY` 环境变量绕过这一边界。
+- 独立 Windows 检查使用 Codex CLI `0.141.0`，它处于精确 Flash 生产验证边界
+  `0.149.0` 之外；这不是将 `0.141.0` 外推为普遍不兼容，而是保持两条证据边界分开。
+- Windows Provider-backed E2E 未运行，Flash、Pro、MiniMax、Qwen 请求均为 `0`；Verifier
+  保持 `providerResolved=false`、`taskDelivered=false`、`runtimeExecuted=false`、
+  `runtimeVerified=false`、`configurationReady=false`、`ready=false`。测试期间没有读取、
+  打印、持久化或发送任何 API key，Windows 测试机源代码未改变。
+- 该独立 Windows artifact/dry-run 证据不改变 macOS `0.4.0-beta.3` Public Beta 的维护者
+  E2E 证据；当前公开 runtime/apply 支持仍限定为 macOS。
 
 ## DeepSeek V4 Flash `0.4.0-beta.3` 公开 Beta
 
@@ -289,5 +309,7 @@
 - GitHub Social Preview 图片已准备，但仍需在 GitHub Settings 手工上传并目视确认。
 - 尚未提交 Awesome List 外部 PR 或任何新增第三方评论。
 - 未由用户进行人工验收。
-- 尚未在真实用户环境安装或发布 npm package；本项目仅通过 GitHub 源码分发。
+- 已有一次独立 Windows 用户环境的 GitHub Release artifact npm install/package-bin/dry-run
+  验证；Windows runtime/apply 仍在写入前安全阻断，Provider-backed E2E 未运行，npm registry
+  仍未发布，本项目不把该结果写成 Windows runtime 支持。
 - StepFun、火山方舟、百度千帆和腾讯云 TokenHub 尚未加入内置 Pack。

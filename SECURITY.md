@@ -23,6 +23,11 @@ task body or credentials in any report.
 
 - API keys are never stored in this repository. Credentials live in the macOS
   Keychain and are read at runtime only.
+- The reviewed credential path in `v0.4.0-beta.3` is macOS Keychain via the
+  command-backed `/usr/bin/security` semantics only. A supported Windows
+  Credential Manager, DPAPI, or equivalent secure backend is not implemented;
+  do not work around this with plaintext `.env` files or long-lived
+  `DEEPSEEK_API_KEY` environment variables.
 - Users must review each provider's privacy, pricing, data-retention, and
   regional policies. Provider behavior and compatibility may change without a
   release from this repository.

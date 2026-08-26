@@ -64,6 +64,15 @@ downgrade or pin Codex. No current-runtime claim is made for those records.
 MiniMax and Qwen provider evidence is unchanged by this Host audit; provider
 evidence never overrides a blocked or unknown Host contract.
 
+## Independent Windows artifact evidence
+
+An independent Windows check installed the public `v0.4.0-beta.3` Release
+artifact and verified package-bin shims plus installer dry-run. It used Codex
+CLI `0.141.0`, which is outside the exact Flash production boundary tested on
+macOS with `0.149.0`. Windows apply/runtime remains intentionally unsupported
+and fails closed before writes; this evidence does not add a Windows Host
+compatibility level or establish Provider runtime support.
+
 ## Detection and fail-closed behavior
 
 The inspector reads the Host version from `codex --version` and the native

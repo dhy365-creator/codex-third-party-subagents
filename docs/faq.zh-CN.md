@@ -74,6 +74,14 @@ Codex 订阅、配额和其自身计费边界仍然成立。
 
 ## 兼容性
 
+### Windows 现在支持吗？
+
+`v0.4.0-beta.3` 当前不支持 Windows runtime 或 `--apply`。正式 Release `.tgz` 已在
+Windows 上独立验证可作为 npm 依赖安装，package-bin shim 与安装器 dry-run 通过；但安装器
+会在托管文件写入前安全阻断，Windows 安全凭据后端也尚未实现。该独立检查使用 Codex CLI
+`0.141.0`，处于精确 Flash `0.149.0` 验证边界之外，因此不构成 Windows Provider 运行时
+支持声明。不要用明文 `.env` 或 `DEEPSEEK_API_KEY` 环境变量绕过这一边界。
+
 ### 当前支持哪些 provider？
 
 当前 Pack / Profile 与证据状态是：

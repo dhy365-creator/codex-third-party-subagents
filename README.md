@@ -45,6 +45,18 @@ active cross-provider installation, create a provider bridge, route to a
 third-party child, or report runtime success. See the exact levels, field
 contract, and version matrix in [Host compatibility](docs/host-compatibility.md).
 
+### Platform and release-artifact status
+
+- **macOS:** `v0.4.0-beta.3` DeepSeek V4 Flash Public Beta has a packaged
+  clean-install maintainer E2E verified on the documented exact Codex CLI
+  `0.149.0` boundary. External use remains explicit and default-off.
+- **Windows:** the official Release `.tgz` installs as an npm dependency, its
+  package-bin shims work, and installer dry-run has been independently verified.
+  Runtime/apply is not supported: this release intentionally fails closed on
+  Windows before managed-file writes. A secure Windows credential backend is
+  not implemented. Do not use plaintext `.env` files or `DEEPSEEK_API_KEY`
+  environment variables as a workaround.
+
 ### What Codex Provides Natively
 
 Codex owns Custom Agent discovery, child spawn/follow-up orchestration,
@@ -265,6 +277,8 @@ Suggested defaults:
 ## Requirements
 
 - macOS and Codex Desktop with custom subagent support.
+- Windows is not a supported runtime/apply platform for `v0.4.0-beta.3`;
+  package installation and dry-run do not imply Windows Provider support.
 - Node.js `>=20`.
 - Provider credentials in macOS Keychain.
 - A working `luna_worker` if Luna fallback is enabled.
