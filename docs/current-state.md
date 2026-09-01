@@ -1,6 +1,20 @@
 # 当前状态
 
-最后更新：2026-08-26
+最后更新：2026-09-01
+
+## Windows Support Phase 2A runtime foundation（本地候选，待复核）
+
+- 基于已接受 LKG `03c76b0ea30d803bc41f43750493117d3bcd589f` 的独立 clean
+  worktree，实现非计费 Windows External runtime foundation；未修改 canonical dirty worktree。
+- 新增 provider-pack 绑定的 Windows Credential Manager auth command；secret 仅经 Codex
+  auth-command stdout 最小通道传递，buffer 随后清零，不进入 argv、环境变量、文件、日志或证据。
+- External private tree 在 Windows 使用既有 current-user ACL 与 reparse/junction fail-closed
+  primitives；`.exe` 校验、最小 Windows env、`taskkill /T` + bounded force cleanup 均支持依赖注入测试。
+- Phase 2B 仅可通过精确内部 offline intent 构造候选。正常 Windows installer 继续生成
+  `credential-runtime-blocker.mjs` auth command；`configurationReady=false`、
+  `providerRuntimeStatus=BLOCKED_PENDING_PHASE_2`、`runtimeVerified=false`、`ready=false`。
+- macOS 完整 `npm test` 为 `242 total / 239 pass / 0 fail / 3 native-Windows skip`；本任务
+  Provider requests 为 `0`。该本地候选不构成 native Windows runtime 验证、公开支持或 LKG 更新。
 
 ## Windows Support Phase 1 跨平台修复候选（2026-08-26）
 

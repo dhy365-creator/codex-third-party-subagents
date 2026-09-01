@@ -8,6 +8,7 @@ import {
   sha256,
   writePrivateFile,
 } from './external-fs-safety.mjs';
+import { privatePathReady } from '../platform-security.mjs';
 
 const SLOT_FIELDS = Object.freeze(['schemaVersion', 'executionId', 'taskName', 'createdAt']);
 
@@ -24,8 +25,19 @@ function codedError(code, message) {
   return error;
 }
 
-export async function acquireExternalSlot({ stateRoot, executionId, taskName, now = new Date() } = {}) {
-  await ensurePrivateDirectory(stateRoot);
+async function privateFileReady(target, fsOptions = {}) {
+  const impl = fsOptions.securityImpl?.privatePathReady ?? privatePathReady;
+  return impl(target, {
+    kind: 'file', mode: EXTERNAL_FILE_MODE,
+    platform: fsOptions.platform ?? process.platform,
+    ...(fsOptions.securityOptions ?? {}),
+  });
+}
+
+export async function acquireExternalSlot({
+  stateRoot, executionId, taskName, now = new Date(), fsOptions = {},
+} = {}) {
+  await ensurePrivateDirectory(stateRoot, { ...fsOptions, approvedRoot: stateRoot });
   const slotPath = path.join(stateRoot, 'active.json');
   const slot = {
     schemaVersion: 1,
@@ -34,7 +46,9 @@ export async function acquireExternalSlot({ stateRoot, executionId, taskName, no
     createdAt: now.toISOString(),
   };
   try {
-    await writePrivateFile(slotPath, `${JSON.stringify(slot, null, 2)}\n`, { exclusive: true });
+    await writePrivateFile(slotPath, `${JSON.stringify(slot, null, 2)}\n`, {
+      ...fsOptions, approvedRoot: stateRoot, exclusive: true,
+    });
   } catch (error) {
     try {
       const current = await fs.lstat(slotPath);
@@ -50,9 +64,9 @@ export async function acquireExternalSlot({ stateRoot, executionId, taskName, no
   return Object.freeze({ slotPath, ...slot });
 }
 
-export async function assertExternalSlot(slot) {
+export async function assertExternalSlot(slot, { fsOptions = {} } = {}) {
   const info = await fs.lstat(slot.slotPath);
-  if (info.isSymbolicLink() || !info.isFile() || (info.mode & 0o777) !== EXTERNAL_FILE_MODE) {
+  if (info.isSymbolicLink() || !info.isFile() || !(await privateFileReady(slot.slotPath, fsOptions))) {
     throw codedError('EXTERNAL_SLOT_UNSAFE', 'external slot type or mode is unsafe');
   }
   const current = JSON.parse(await fs.readFile(slot.slotPath, 'utf8'));
@@ -86,11 +100,12 @@ export async function finalizeExternalArchive({
   collection,
   evidenceRefs,
   now = new Date(),
+  fsOptions = {},
 } = {}) {
   if (!['completed', 'failed', 'timed_out', 'cancelled'].includes(status)) {
     throw new Error('archive status is invalid');
   }
-  await ensurePrivateDirectory(archiveDir);
+  await ensurePrivateDirectory(archiveDir, { ...fsOptions, approvedRoot: archiveDir });
   const archivePath = path.join(archiveDir, `${status}-${executionId}.json`);
   const payload = redactPortableData({
     schemaVersion: 1,
@@ -112,7 +127,9 @@ export async function finalizeExternalArchive({
   }, { cwd: request.cwd, message: request.message });
   const serialized = `${JSON.stringify(payload, null, 2)}\n`;
   if (containsSensitiveText(serialized)) throw new Error('portable archive still contains sensitive data');
-  await writePrivateFile(archivePath, serialized, { exclusive: true, maxBytes: 128 * 1024 });
+  await writePrivateFile(archivePath, serialized, {
+    ...fsOptions, approvedRoot: archiveDir, exclusive: true, maxBytes: 128 * 1024,
+  });
   return Object.freeze({
     archivePath,
     archiveRef: Object.freeze({
@@ -123,10 +140,10 @@ export async function finalizeExternalArchive({
   });
 }
 
-export async function releaseExternalSlot(slot, archivePath) {
-  await assertExternalSlot(slot);
+export async function releaseExternalSlot(slot, archivePath, { fsOptions = {} } = {}) {
+  await assertExternalSlot(slot, { fsOptions });
   const archive = await fs.lstat(archivePath);
-  if (archive.isSymbolicLink() || !archive.isFile() || (archive.mode & 0o777) !== EXTERNAL_FILE_MODE) {
+  if (archive.isSymbolicLink() || !archive.isFile() || !(await privateFileReady(archivePath, fsOptions))) {
     throw new Error('archive must be finalized before slot release');
   }
   await fs.unlink(slot.slotPath);

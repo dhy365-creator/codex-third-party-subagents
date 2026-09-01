@@ -2,6 +2,12 @@
 
 ## 当前发布
 
+- [x] 2026-09-01 完成 Windows Support Phase 2A 本地 runtime foundation 候选：Windows
+  command-backed Credential Manager、ACL/reparse private tree、`.exe`/最小环境、process-tree
+  supervisor 与内部 Phase 2B offline candidate 已实现；完整测试 `242 total / 239 pass / 0 fail /
+  3 native-Windows skip`，Provider requests `0`。公开 Windows runtime 仍
+  `BLOCKED_PENDING_PHASE_2`，等待独立 Phase 2B native Windows offline acceptance。
+
 - [x] 2026-08-25 将已接受的 Flash Beta RC 通过 PR #15 合并到 `main`，发布
   `v0.4.0-beta.3` tag 与 GitHub prerelease；`main`/tag CI、66 文件资产 SHA-256 回读和
   fresh install 均通过，npm registry 未发布。
@@ -18,8 +24,10 @@
   目标与父组件映射；聚焦测试 `35 total / 32 pass / 0 fail / 3 native-Windows skip`，完整
   macOS `npm test` `233 total / 230 pass / 0 fail / 3 native-Windows skip`。Native Windows cleanup/ACL/
   reparse 证据仍需在后续跨平台复查刷新。
-- [ ] Phase 2 单独验证 Windows Provider runtime、原生 subprocess/process-tree、受支持 Codex
-  CLI contract、Release artifact clean install，并仅在明确授权后执行一次 Flash live E2E。
+- [ ] Phase 2B 使用 immutable Phase 2A candidate 单独验证 native Windows ACL/reparse、
+  Credential Manager auth command、subprocess/process-tree、受支持 Codex CLI contract 与
+  release artifact clean install；不得发 Provider 请求。Phase 2C 仅在后续明确授权后执行一次
+  Flash live E2E。
 - [ ] 取得 DeepSeek V4 Flash 独立真实用户验收；公开 Beta 与维护者 clean-install E2E 不自动
   扩写为广义用户验收、自动路由或官方背书。
 

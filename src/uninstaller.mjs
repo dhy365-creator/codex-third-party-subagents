@@ -30,6 +30,8 @@ const RUNTIME_FILES = [
   'credentials/windows-credential-manager.mjs',
   'credentials/windows-credential-helper.ps1',
   'credential-runtime-blocker.mjs',
+  'windows-credential-command.mjs',
+  'windows-runtime-candidate.mjs',
   'platform-security.mjs',
   'preflight-runtime.mjs',
   'provider-packs.mjs',

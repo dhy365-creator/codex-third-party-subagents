@@ -87,9 +87,14 @@ export function createExternalCodexTransport(options = {}) {
     sourceEnv,
     outputLimits,
     credentialPreflightExecFileImpl,
+    platform = process.platform,
+    securityOptions,
+    securityImpl,
+    processTreeSupervisorFactory,
     executionPermit = null,
     now = () => new Date(),
   } = options;
+  const fsOptions = { platform, securityOptions, securityImpl };
   for (const value of [stateRoot, codexPath, catalogSource]) {
     if (!path.isAbsolute(value ?? '')) throw new Error('external transport paths must be absolute');
   }
@@ -111,7 +116,7 @@ export function createExternalCodexTransport(options = {}) {
       const serialized = JSON.stringify(checked);
       if (containsCredentialText(serialized)) throw new Error('task envelope contains credential-like material');
       if (Buffer.byteLength(serialized) > 32 * 1024) throw new Error('task envelope is oversized');
-      const resolved = await resolveApprovedCwd(checked.cwd, context.approvedRoot);
+      const resolved = await resolveApprovedCwd(checked.cwd, context.approvedRoot, { platform });
       const scope = await canonicalizeExpectedScope(resolved.cwd, checked.expectedScope);
       request = Object.freeze({ ...checked, cwd: resolved.cwd, expectedScope: scope });
       const pack = resolveExternalProviderTuple(request);
@@ -120,10 +125,10 @@ export function createExternalCodexTransport(options = {}) {
         pack,
         { allowFixture: testMode },
       );
-      const validatedUserHome = await validateExternalUserHome(userHome);
+      const validatedUserHome = await validateExternalUserHome(userHome, { platform });
       const [codexExecutable] = await Promise.all([
-        resolveExecutable(codexPath),
-        resolveExecutable(checkedCredential.command),
+        resolveExecutable(codexPath, { platform }),
+        resolveExecutable(checkedCredential.command, { platform }),
       ]);
       const productionCatalog = testMode
         ? null
@@ -133,8 +138,10 @@ export function createExternalCodexTransport(options = {}) {
         snapshotTree(resolved.approvedRoot),
         snapshotParentConfiguration(context.parentCodexHome),
       ]);
-      slot = await acquireExternalSlot({ stateRoot, executionId, taskName: request.taskName, now: now() });
-      paths = await createExecutionTree(stateRoot, executionId);
+      slot = await acquireExternalSlot({
+        stateRoot, executionId, taskName: request.taskName, now: now(), fsOptions,
+      });
+      paths = await createExecutionTree(stateRoot, executionId, fsOptions);
       const configured = await writeMinimalExternalHome({
         homeDir: paths.home,
         catalogSource,
@@ -152,6 +159,7 @@ export function createExternalCodexTransport(options = {}) {
         userHome: validatedUserHome,
         sourceEnv,
         execFileImpl: credentialPreflightExecFileImpl,
+        platform,
       });
       const schemaPath = await writeExternalResultSchema(paths.evidence, request);
       const resultPath = path.join(paths.results, 'result.json');
@@ -162,7 +170,7 @@ export function createExternalCodexTransport(options = {}) {
         `${JSON.stringify(request, null, 2)}\n`,
         { exclusive: true, maxBytes: 32 * 1024 },
       );
-      const privateTree = await assertPrivateTree(paths.root);
+      const privateTree = await assertPrivateTree(paths.root, fsOptions);
       if (!privateTree.pass) throw new Error('prepared execution tree is not owner-only');
       const prepared = Object.freeze({ executionId, taskName: request.taskName, providerId: request.providerId, model: request.model });
       preparedStates.set(prepared, {
@@ -176,14 +184,14 @@ export function createExternalCodexTransport(options = {}) {
       if (slot) {
         try {
           const archiveDir = paths?.archive ?? path.join(stateRoot, 'preparation-archive');
-          await ensurePrivateDirectory(archiveDir);
+          await ensurePrivateDirectory(archiveDir, { ...fsOptions, approvedRoot: archiveDir });
           const archive = await finalizeExternalArchive({
             archiveDir, executionId, request: request ?? input, status: 'failed',
             lifecycle: { state: 'cleanup_pending', outcome: 'failed', activeSlotReleased: false },
             collection: { changedFiles: [], childResult: null, issues: ['preparation failed'] },
-            evidenceRefs: [], now: now(),
+            evidenceRefs: [], now: now(), fsOptions,
           });
-          await releaseExternalSlot(slot, archive.archivePath);
+          await releaseExternalSlot(slot, archive.archivePath, { fsOptions });
         } catch {
           // Retain the exact active marker when safe finalization cannot be proven.
         }
@@ -203,7 +211,10 @@ export function createExternalCodexTransport(options = {}) {
       if (!testMode) {
         state.productionPermit = consumeExternalFlashExecutionPermit(executionPermit, state.request);
       }
-      await Promise.all([assertExternalSlot(state.slot), assertStableCwd(state.request.cwd)]);
+      await Promise.all([
+        assertExternalSlot(state.slot, { fsOptions }),
+        assertStableCwd(state.request.cwd, { platform }),
+      ]);
       state.phase = transitionLifecycle(state.phase, 'running');
       state.process = await launchExternalProcess({
         codexPath,
@@ -222,6 +233,8 @@ export function createExternalCodexTransport(options = {}) {
         graceMs,
         outputLimits,
         sourceEnv,
+        platform,
+        processTreeSupervisorFactory,
       });
       const execution = Object.freeze({ executionId: prepared.executionId, taskName: prepared.taskName, pid: state.process.pid });
       executionStates.set(execution, state);
@@ -229,7 +242,7 @@ export function createExternalCodexTransport(options = {}) {
     } catch (error) {
       if (!state.process) {
         try {
-          await assertExternalSlot(state.slot);
+          await assertExternalSlot(state.slot, { fsOptions });
           const archived = await finalizeExternalArchive({
             archiveDir: state.paths.archive,
             executionId: prepared.executionId,
@@ -238,9 +251,9 @@ export function createExternalCodexTransport(options = {}) {
             lifecycle: { state: 'cleanup_pending', outcome: 'failed', activeSlotReleased: false },
             collection: { changedFiles: [], childResult: null, issues: ['execution failed before process launch'] },
             evidenceRefs: [],
-            now: now(),
+            now: now(), fsOptions,
           });
-          await releaseExternalSlot(state.slot, archived.archivePath);
+          await releaseExternalSlot(state.slot, archived.archivePath, { fsOptions });
           state.phase = 'closed';
         } catch {
           // Retain the exact active marker when safe finalization cannot be proven.
@@ -288,10 +301,10 @@ export function createExternalCodexTransport(options = {}) {
         lifecycle: pendingLifecycle,
         collection: state.collection,
         evidenceRefs: state.collection.evidenceRefs,
-        now: now(),
+        now: now(), fsOptions,
       });
       assertExternalProcessGroupClosed(state.processResult);
-      await releaseExternalSlot(state.slot, archived.archivePath);
+      await releaseExternalSlot(state.slot, archived.archivePath, { fsOptions });
       state.phase = transitionLifecycle(state.phase, 'closed');
       const lifecycle = provisionalLifecycle(state, state.outcome, true);
       const evidenceRefs = Object.freeze([...state.collection.evidenceRefs, archived.archiveRef]);

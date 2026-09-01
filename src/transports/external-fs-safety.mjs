@@ -2,6 +2,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import {
+  assertNoReparsePath,
+  privatePathReady,
+  secureManagedPath,
+} from '../platform-security.mjs';
 
 export const EXTERNAL_DIRECTORY_MODE = 0o700;
 export const EXTERNAL_FILE_MODE = 0o600;
@@ -23,6 +28,29 @@ function ownerUid(info) {
   return typeof process.getuid === 'function' ? process.getuid() : info.uid;
 }
 
+function platformOptions(options = {}) {
+  return {
+    platform: options.platform ?? process.platform,
+    ...(options.securityOptions ?? {}),
+  };
+}
+
+async function securePath(target, kind, mode, options) {
+  const impl = options.securityImpl?.secureManagedPath ?? secureManagedPath;
+  await impl(target, { kind, mode, ...platformOptions(options) });
+}
+
+async function pathReady(target, kind, mode, options) {
+  const impl = options.securityImpl?.privatePathReady ?? privatePathReady;
+  return impl(target, { kind, mode, uid: ownerUid(await fs.lstat(target)), ...platformOptions(options) });
+}
+
+async function rejectReparse(target, root, options) {
+  if ((options.platform ?? process.platform) !== 'win32') return;
+  const impl = options.securityImpl?.assertNoReparsePath ?? assertNoReparsePath;
+  await impl(target, root, platformOptions(options));
+}
+
 export function isPathInside(parent, candidate) {
   const relative = path.relative(path.resolve(parent), path.resolve(candidate));
   return relative === '' || (relative !== '..'
@@ -39,7 +67,8 @@ export function validateExternalContext(context) {
   return context;
 }
 
-export async function ensurePrivateDirectory(directory, { exclusive = false } = {}) {
+export async function ensurePrivateDirectory(directory, options = {}) {
+  const { exclusive = false } = options;
   if (!path.isAbsolute(directory ?? '')) throw new Error('private directory must be absolute');
   const existing = await lstatIfExists(directory);
   if (existing && (existing.isSymbolicLink() || !existing.isDirectory())) {
@@ -50,18 +79,27 @@ export async function ensurePrivateDirectory(directory, { exclusive = false } = 
     await fs.mkdir(directory, { recursive: !exclusive, mode: EXTERNAL_DIRECTORY_MODE });
   }
   const current = await fs.lstat(directory);
-  if (current.isSymbolicLink() || !current.isDirectory() || current.uid !== ownerUid(current)) {
+  if (current.isSymbolicLink() || !current.isDirectory()) {
     throw new Error('private directory ownership or type is invalid');
   }
-  await fs.chmod(directory, EXTERNAL_DIRECTORY_MODE);
+  await rejectReparse(directory, options.approvedRoot ?? directory, options);
+  await securePath(directory, 'directory', EXTERNAL_DIRECTORY_MODE, options);
+  if (!(await pathReady(directory, 'directory', EXTERNAL_DIRECTORY_MODE, options))) {
+    throw new Error('private directory security is invalid');
+  }
   return directory;
 }
 
-export async function writePrivateFile(filePath, data, { exclusive = false, maxBytes = 1024 * 1024 } = {}) {
+export async function writePrivateFile(filePath, data, options = {}) {
+  const { exclusive = false, maxBytes = 1024 * 1024 } = options;
   if (!path.isAbsolute(filePath ?? '')) throw new Error('private file path must be absolute');
   const contents = Buffer.isBuffer(data) ? data : Buffer.from(String(data));
   if (contents.byteLength > maxBytes) throw new Error('private file exceeds its size limit');
-  await ensurePrivateDirectory(path.dirname(filePath));
+  const directoryOptions = { ...options };
+  delete directoryOptions.exclusive;
+  delete directoryOptions.maxBytes;
+  await ensurePrivateDirectory(path.dirname(filePath), directoryOptions);
+  await rejectReparse(filePath, options.approvedRoot ?? path.dirname(filePath), options);
   const existing = await lstatIfExists(filePath);
   if (existing && (existing.isSymbolicLink() || !existing.isFile())) {
     throw new Error('private file target is unsafe');
@@ -75,7 +113,7 @@ export async function writePrivateFile(filePath, data, { exclusive = false, maxB
   } finally {
     await handle.close();
   }
-  await fs.chmod(temporary, EXTERNAL_FILE_MODE);
+  await securePath(temporary, 'file', EXTERNAL_FILE_MODE, options);
   try {
     if (exclusive) {
       await fs.link(temporary, filePath);
@@ -87,6 +125,9 @@ export async function writePrivateFile(filePath, data, { exclusive = false, maxB
     await fs.unlink(temporary).catch(() => {});
     throw error;
   }
+  if (!(await pathReady(filePath, 'file', EXTERNAL_FILE_MODE, options))) {
+    throw new Error('private file security is invalid');
+  }
   return filePath;
 }
 
@@ -95,31 +136,34 @@ export function createExecutionId(now = new Date()) {
   return `${stamp}-${crypto.randomBytes(8).toString('hex')}`;
 }
 
-export async function createExecutionTree(stateRoot, executionId) {
+export async function createExecutionTree(stateRoot, executionId, options = {}) {
   if (!/^[A-Za-z0-9-]{12,96}$/u.test(executionId ?? '')) throw new Error('execution id is invalid');
-  await ensurePrivateDirectory(stateRoot);
+  await ensurePrivateDirectory(stateRoot, { ...options, approvedRoot: stateRoot });
   const executions = path.join(stateRoot, 'executions');
-  await ensurePrivateDirectory(executions);
+  await ensurePrivateDirectory(executions, { ...options, approvedRoot: stateRoot });
   const root = path.join(executions, executionId);
-  await ensurePrivateDirectory(root, { exclusive: true });
+  await ensurePrivateDirectory(root, { ...options, exclusive: true, approvedRoot: stateRoot });
   const names = ['home', 'results', 'logs', 'evidence', 'archive'];
   const directories = Object.fromEntries(names.map((name) => [name, path.join(root, name)]));
-  for (const directory of Object.values(directories)) await ensurePrivateDirectory(directory);
+  for (const directory of Object.values(directories)) {
+    await ensurePrivateDirectory(directory, { ...options, approvedRoot: stateRoot });
+  }
   directories.tmp = path.join(directories.home, 'tmp');
-  await ensurePrivateDirectory(directories.tmp);
+  await ensurePrivateDirectory(directories.tmp, { ...options, approvedRoot: stateRoot });
   return Object.freeze({ root, ...directories });
 }
 
-export async function resolveApprovedCwd(cwd, approvedRoot) {
+export async function resolveApprovedCwd(cwd, approvedRoot, { platform = process.platform } = {}) {
   if (!path.isAbsolute(cwd ?? '') || !path.isAbsolute(approvedRoot ?? '')) {
     throw new Error('cwd and approvedRoot must be absolute');
   }
   const inputInfo = await fs.lstat(cwd);
   if (inputInfo.isSymbolicLink() || !inputInfo.isDirectory()) throw new Error('cwd must be a real directory');
   const [resolved, resolvedRoot] = await Promise.all([fs.realpath(cwd), fs.realpath(approvedRoot)]);
-  const unsafeRoots = new Set(['/', os.homedir(), os.tmpdir(), '/tmp', '/private/tmp']
-    .map((value) => path.resolve(value)));
-  if (unsafeRoots.has(path.resolve(resolved)) || unsafeRoots.has(path.resolve(resolvedRoot))) {
+  const normalize = (value) => platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
+  const unsafeRoots = new Set([path.parse(resolved).root, os.homedir(), os.tmpdir(), '/tmp', '/private/tmp']
+    .map(normalize));
+  if (unsafeRoots.has(normalize(resolved)) || unsafeRoots.has(normalize(resolvedRoot))) {
     throw new Error('cwd or approvedRoot is an unsafe root');
   }
   if (!isPathInside(resolvedRoot, resolved)) throw new Error('cwd escapes approvedRoot');
@@ -148,10 +192,14 @@ export async function canonicalizeExpectedScope(cwd, expectedScope) {
   return Object.freeze([...new Set(canonical)].sort());
 }
 
-export async function assertStableCwd(expectedCwd) {
+export async function assertStableCwd(expectedCwd, { platform = process.platform } = {}) {
   const info = await fs.lstat(expectedCwd);
   if (info.isSymbolicLink() || !info.isDirectory()) throw new Error('cwd changed type before execution');
-  if (await fs.realpath(expectedCwd) !== expectedCwd) throw new Error('cwd realpath changed');
+  const canonical = await fs.realpath(expectedCwd);
+  const stable = platform === 'win32'
+    ? canonical.toLowerCase() === expectedCwd.toLowerCase()
+    : canonical === expectedCwd;
+  if (!stable) throw new Error('cwd realpath changed');
   return expectedCwd;
 }
 
@@ -253,41 +301,51 @@ async function allowedRuntimeSymlink(root, target, allowedExecutable) {
   }
 }
 
-export async function tightenPrivateTree(root, { allowedExecutable = null } = {}) {
+export async function tightenPrivateTree(root, options = {}) {
+  const { allowedExecutable = null, platform = process.platform } = options;
   async function visit(target) {
     const info = await fs.lstat(target);
     if (info.isSymbolicLink()) {
-      if (!(await allowedRuntimeSymlink(root, target, allowedExecutable))) {
+      if (platform === 'win32' || !(await allowedRuntimeSymlink(root, target, allowedExecutable))) {
         throw new Error('private runtime tree contains an unsafe symlink');
       }
       return;
     }
     if (info.isDirectory()) {
-      await fs.chmod(target, EXTERNAL_DIRECTORY_MODE);
+      await rejectReparse(target, root, options);
+      await securePath(target, 'directory', EXTERNAL_DIRECTORY_MODE, options);
       for (const name of await fs.readdir(target)) await visit(path.join(target, name));
     } else if (info.isFile()) {
-      await fs.chmod(target, EXTERNAL_FILE_MODE);
+      await rejectReparse(target, root, options);
+      await securePath(target, 'file', EXTERNAL_FILE_MODE, options);
     } else throw new Error('private runtime tree contains an unsupported entry');
   }
   await visit(root);
   return root;
 }
 
-export async function assertPrivateTree(root, { allowedExecutable = null } = {}) {
+export async function assertPrivateTree(root, options = {}) {
+  const { allowedExecutable = null, platform = process.platform } = options;
   const problems = [];
   async function visit(target, relative = '.') {
     const info = await fs.lstat(target);
     const mode = info.mode & 0o777;
     if (info.isSymbolicLink()) {
-      if (!(await allowedRuntimeSymlink(root, target, allowedExecutable))) {
+      if (platform === 'win32' || !(await allowedRuntimeSymlink(root, target, allowedExecutable))) {
         problems.push(`${relative}: symlink`);
       }
     }
     else if (info.isDirectory()) {
-      if (mode !== EXTERNAL_DIRECTORY_MODE) problems.push(`${relative}: directory mode ${mode.toString(8)}`);
+      try { await rejectReparse(target, root, options); } catch { problems.push(`${relative}: reparse`); }
+      if (!(await pathReady(target, 'directory', EXTERNAL_DIRECTORY_MODE, options))) {
+        problems.push(`${relative}: directory security`);
+      }
       for (const name of await fs.readdir(target)) await visit(path.join(target, name), path.join(relative, name));
     } else if (info.isFile()) {
-      if (mode !== EXTERNAL_FILE_MODE) problems.push(`${relative}: file mode ${mode.toString(8)}`);
+      try { await rejectReparse(target, root, options); } catch { problems.push(`${relative}: reparse`); }
+      if (!(await pathReady(target, 'file', EXTERNAL_FILE_MODE, options))) {
+        problems.push(`${relative}: file security`);
+      }
     } else problems.push(`${relative}: unsupported type`);
   }
   await visit(root);

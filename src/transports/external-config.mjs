@@ -5,6 +5,7 @@ import { PRODUCTION_CATALOG_CONTRACT, validateProductionCatalog } from '../produ
 import { resolveProviderPack } from '../provider-packs.mjs';
 import { containsCredentialText } from './external-evidence.mjs';
 import { sha256, writePrivateFile } from './external-fs-safety.mjs';
+import { WINDOWS_CREDENTIAL_COMMAND_PATH } from '../windows-credential-command.mjs';
 
 export const EXTERNAL_DISABLED_FEATURES = Object.freeze([
   'apps',
@@ -63,6 +64,22 @@ export function validateCredentialCommand(contract, pack, { allowFixture = false
       || !/^[A-Za-z0-9._@-]{1,128}$/u.test(contract.args[2] ?? '')
       || JSON.stringify(contract.args) !== JSON.stringify(expected)) {
       throw new Error('credential command must use the reviewed macOS Keychain contract');
+    }
+  } else if (contract.kind === 'windows-credential-manager') {
+    const script = contract.args[0];
+    const expected = [
+      script,
+      '--provider', pack.id,
+      '--model', pack.model,
+      '--account', contract.args[6],
+    ];
+    if (path.basename(contract.command).toLowerCase() !== 'node.exe'
+      || path.basename(script ?? '') !== 'windows-credential-command.mjs'
+      || !path.isAbsolute(script ?? '')
+      || path.resolve(script) !== path.resolve(WINDOWS_CREDENTIAL_COMMAND_PATH)
+      || !/^[A-Za-z0-9._@-]{1,128}$/u.test(contract.args[6] ?? '')
+      || JSON.stringify(contract.args) !== JSON.stringify(expected)) {
+      throw new Error('credential command must use the reviewed Windows Credential Manager contract');
     }
   } else if (contract.kind !== 'fixture' || !allowFixture) {
     throw new Error('credential command kind is unsupported');

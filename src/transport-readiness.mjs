@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { readExternalFlashEvidence } from './external-evidence-store.mjs';
 import { PERMISSION_PROFILES, TRANSPORTS } from './transport-contract.mjs';
 import { EVIDENCE_SOURCES, validateTransportEvidence } from './transport-evidence.mjs';
+import { privatePathReady } from './platform-security.mjs';
 import {
   EXTERNAL_CONTROL_PLANE,
   maintainerExternalEvidence,
@@ -17,7 +18,11 @@ async function lstatIfExists(target) {
   }
 }
 
-async function inspectRuntimeRoot(runtimeRoot) {
+async function inspectRuntimeRoot(runtimeRoot, {
+  platform = process.platform,
+  securityOptions,
+  privatePathReadyImpl = privatePathReady,
+} = {}) {
   const info = await lstatIfExists(runtimeRoot);
   if (!info) {
     return Object.freeze({
@@ -28,17 +33,19 @@ async function inspectRuntimeRoot(runtimeRoot) {
       reason: 'isolated runtime root has not been created',
     });
   }
-  const owner = typeof process.getuid !== 'function' || info.uid === process.getuid();
-  const mode = info.mode & 0o777;
-  const ready = info.isDirectory() && !info.isSymbolicLink() && owner && mode === 0o700;
+  const uid = typeof process.getuid === 'function' ? process.getuid() : undefined;
+  const ready = info.isDirectory() && !info.isSymbolicLink()
+    && await privatePathReadyImpl(runtimeRoot, {
+      kind: 'directory', mode: 0o700, uid, platform, ...(securityOptions ?? {}),
+    });
   return Object.freeze({
     state: ready ? 'READY' : 'UNSAFE',
     present: true,
     ready,
     unsafe: !ready,
     reason: ready
-      ? 'isolated runtime root is an owner-only real directory'
-      : 'isolated runtime root type, owner, or mode is unsafe',
+      ? 'isolated runtime root is a current-user-private real directory'
+      : 'isolated runtime root type or platform security is unsafe',
   });
 }
 
@@ -94,11 +101,16 @@ export async function inspectExternalTransportReadiness({
   permissionProfile = PERMISSION_PROFILES.READ_ONLY,
   credentialReady = null,
   externalEvidence,
+  platform = process.platform,
+  securityOptions,
+  privatePathReadyImpl,
 } = {}) {
   if (!providerPack?.id || !providerPack?.role || !providerPack?.model) {
     throw new Error('provider pack is required for External Transport readiness');
   }
-  const runtimeRootState = await inspectRuntimeRoot(runtimeRoot);
+  const runtimeRootState = await inspectRuntimeRoot(runtimeRoot, {
+    platform, securityOptions, privatePathReadyImpl,
+  });
   const permissionReady = Object.values(PERMISSION_PROFILES).includes(permissionProfile);
   const codexExecReady = codexDetected === true && customAgentHost?.version === '0.149.0';
   let submittedEvidence = externalEvidence;
@@ -213,9 +225,9 @@ export function externalReadinessChecks(readiness) {
       name: 'External credential readiness',
       status: credentialStatus,
       detail: readiness.credential.ready === true
-        ? 'Keychain item presence was established without reading its value'
+        ? 'platform credential presence was established without retaining its value'
         : readiness.credential.ready === false
-          ? 'required Keychain item is missing'
+          ? 'required platform credential is missing'
           : 'credential readiness was not established',
     }),
     Object.freeze({

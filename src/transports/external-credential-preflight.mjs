@@ -44,11 +44,12 @@ export async function preflightExternalCredential({
   userHome,
   sourceEnv,
   execFileImpl = execFile,
+  platform = process.platform,
 } = {}) {
   const [codexExecutable, credentialExecutable, validatedUserHome] = await Promise.all([
-    resolveExecutable(codexPath),
-    resolveExecutable(credentialCommand?.command),
-    validateExternalUserHome(userHome),
+    resolveExecutable(codexPath, { platform }),
+    resolveExecutable(credentialCommand?.command, { platform }),
+    validateExternalUserHome(userHome, { platform }),
   ]);
   const env = isolatedChildEnvironment({
     codexHome,
@@ -56,6 +57,7 @@ export async function preflightExternalCredential({
     userHome: validatedUserHome,
     executablePaths: [codexExecutable, credentialExecutable],
     sourceEnv,
+    platform,
   });
   let stdout;
   try {

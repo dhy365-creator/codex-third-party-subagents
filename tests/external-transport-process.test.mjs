@@ -33,7 +33,7 @@ test('an unresolved orphan is archived but blocks active-slot release', async ()
   const source = await fs.readFile(path.resolve('src/transports/external-codex.mjs'), 'utf8');
   const archive = source.indexOf('const archived = await finalizeExternalArchive');
   const guard = source.indexOf('assertExternalProcessGroupClosed(state.processResult)', archive);
-  const release = source.indexOf('await releaseExternalSlot(state.slot, archived.archivePath)', guard);
+  const release = source.indexOf('await releaseExternalSlot(state.slot, archived.archivePath, { fsOptions })', guard);
   assert.equal(archive >= 0 && archive < guard && guard < release, true);
 });
 

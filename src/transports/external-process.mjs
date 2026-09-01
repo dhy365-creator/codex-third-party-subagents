@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { execFile as execFileCallback, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { EXTERNAL_DISABLED_FEATURES } from './external-config.mjs';
 import { sanitizeStderrLog, sanitizeStdoutLog } from './external-evidence.mjs';
 import { sha256, writePrivateFile } from './external-fs-safety.mjs';
@@ -11,10 +12,12 @@ export const DEFAULT_OUTPUT_LIMITS = Object.freeze({
   stderrBytes: 256 * 1024,
 });
 
-function signalProcessGroup(pid, signal) {
+const execFile = promisify(execFileCallback);
+
+function signalProcessGroup(pid, signal, killImpl = process.kill) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
-    process.kill(process.platform === 'win32' ? pid : -pid, signal);
+    killImpl(-pid, signal);
     return true;
   } catch (error) {
     if (error?.code === 'ESRCH') return false;
@@ -22,14 +25,56 @@ function signalProcessGroup(pid, signal) {
   }
 }
 
-function processGroupAlive(pid) {
+function processGroupAlive(pid, killImpl = process.kill) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
-    process.kill(process.platform === 'win32' ? pid : -pid, 0);
+    killImpl(-pid, 0);
     return true;
   } catch (error) {
     return error?.code === 'EPERM';
   }
+}
+
+function windowsSystemExecutable(name, env) {
+  const root = path.resolve(env.SystemRoot ?? env.WINDIR ?? 'C:\\Windows');
+  return path.join(root, 'System32', name);
+}
+
+export function createProcessTreeSupervisor(pid, {
+  platform = process.platform,
+  env = process.env,
+  execFileImpl = execFile,
+  killImpl = process.kill,
+} = {}) {
+  if (!Number.isInteger(pid) || pid <= 0) throw new Error('process tree pid is invalid');
+  if (platform !== 'win32') {
+    return Object.freeze({
+      terminate: async (force = false) => signalProcessGroup(pid, force ? 'SIGKILL' : 'SIGTERM', killImpl),
+      isAlive: async () => processGroupAlive(pid, killImpl),
+    });
+  }
+  const taskkill = windowsSystemExecutable('taskkill.exe', env);
+  const tasklist = windowsSystemExecutable('tasklist.exe', env);
+  const childEnv = { SystemRoot: env.SystemRoot ?? env.WINDIR, WINDIR: env.WINDIR ?? env.SystemRoot };
+  return Object.freeze({
+    terminate: async (force = false) => {
+      try {
+        await execFileImpl(taskkill, ['/PID', String(pid), '/T', ...(force ? ['/F'] : [])], {
+          env: childEnv, windowsHide: true, encoding: 'utf8', timeout: 5000, maxBuffer: 64 * 1024,
+        });
+        return true;
+      } catch (error) {
+        if ([128, 255].includes(Number(error?.code))) return false;
+        throw error;
+      }
+    },
+    isAlive: async () => {
+      const { stdout } = await execFileImpl(tasklist, ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+        env: childEnv, windowsHide: true, encoding: 'utf8', timeout: 5000, maxBuffer: 64 * 1024,
+      });
+      return new RegExp(`,"${pid}",`, 'u').test(String(stdout));
+    },
+  });
 }
 
 export function assertExternalProcessGroupClosed(processResult) {
@@ -55,11 +100,22 @@ function capture(stream, maxBytes) {
   return () => ({ text: Buffer.concat(chunks).toString('utf8'), truncated });
 }
 
-export async function resolveExecutable(executable) {
+export async function resolveExecutable(executable, { platform = process.platform } = {}) {
   if (!path.isAbsolute(executable ?? '')) throw new Error('codex binary path must be absolute');
+  const input = await fs.lstat(executable);
+  if ((platform === 'win32' && input.isSymbolicLink())
+    || (!input.isFile() && !input.isSymbolicLink())) {
+    throw new Error('codex binary is not a safe executable');
+  }
   const resolved = await fs.realpath(executable);
   const info = await fs.stat(resolved);
-  if (!info.isFile() || (info.mode & 0o111) === 0 || (info.mode & 0o022) !== 0) {
+  const canonical = platform === 'win32' && process.platform === 'win32'
+    ? resolved.toLowerCase() === path.resolve(executable).toLowerCase()
+    : platform === 'win32' || resolved === path.resolve(executable);
+  const executableReady = platform === 'win32'
+    ? path.extname(resolved).toLowerCase() === '.exe'
+    : (info.mode & 0o111) !== 0 && (info.mode & 0o022) === 0;
+  if (!canonical || !info.isFile() || !executableReady) {
     throw new Error('codex binary is not a safe executable');
   }
   return resolved;
@@ -67,22 +123,31 @@ export async function resolveExecutable(executable) {
 
 export function isolatedChildEnvironment({
   codexHome, tmpDir, userHome, executablePaths = [], sourceEnv = process.env,
+  platform = process.platform,
 } = {}) {
   if (!path.isAbsolute(codexHome ?? '') || !path.isAbsolute(tmpDir ?? '')
     || !path.isAbsolute(userHome ?? '')) {
     throw new Error('isolated CODEX_HOME, TMPDIR, and real user HOME must be absolute');
   }
+  const platformPaths = platform === 'win32'
+    ? [path.join(sourceEnv.SystemRoot ?? sourceEnv.WINDIR ?? 'C:\\Windows', 'System32')]
+    : ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
   const safePath = [...new Set([
     path.dirname(process.execPath),
     ...executablePaths.map((value) => path.dirname(value)),
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    '/usr/bin',
-    '/bin',
-    '/usr/sbin',
-    '/sbin',
-  ])].join(':');
-  const env = {
+    ...platformPaths,
+  ])].join(platform === 'win32' ? ';' : ':');
+  const env = platform === 'win32' ? {
+    CODEX_HOME: codexHome,
+    HOME: userHome,
+    USERPROFILE: userHome,
+    TEMP: tmpDir,
+    TMP: tmpDir,
+    PATH: safePath,
+    SystemRoot: sourceEnv.SystemRoot ?? sourceEnv.WINDIR,
+    WINDIR: sourceEnv.WINDIR ?? sourceEnv.SystemRoot,
+    NO_COLOR: '1',
+  } : {
     CODEX_HOME: codexHome,
     HOME: userHome,
     TMPDIR: tmpDir,
@@ -140,6 +205,9 @@ export async function launchExternalProcess({
   graceMs = 3000,
   outputLimits = DEFAULT_OUTPUT_LIMITS,
   sourceEnv,
+  platform = process.platform,
+  spawnImpl = spawn,
+  processTreeSupervisorFactory = createProcessTreeSupervisor,
 } = {}) {
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || !Number.isInteger(graceMs) || graceMs < 0) {
     throw new Error('process timeout configuration is invalid');
@@ -154,9 +222,9 @@ export async function launchExternalProcess({
     throw new Error('process output limits are incomplete');
   }
   const [executable, credentialExecutable] = await Promise.all([
-    resolveExecutable(codexPath),
-    resolveExecutable(credentialCommandPath),
-    validateExternalUserHome(userHome),
+    resolveExecutable(codexPath, { platform }),
+    resolveExecutable(credentialCommandPath, { platform }),
+    validateExternalUserHome(userHome, { platform }),
   ]);
   const args = externalCodexArgs({ cwd, schemaPath, resultPath, permissionProfile });
   const env = isolatedChildEnvironment({
@@ -165,14 +233,19 @@ export async function launchExternalProcess({
     userHome,
     executablePaths: [executable, credentialExecutable],
     sourceEnv,
+    platform,
   });
   const startedAt = new Date();
-  const child = spawn(executable, args, {
+  const spawnOptions = {
     cwd,
     env,
-    detached: process.platform !== 'win32',
+    detached: platform !== 'win32',
     stdio: ['pipe', 'pipe', 'pipe'],
-  });
+  };
+  const child = spawnImpl === spawn
+    ? spawn(executable, args, spawnOptions)
+    : spawnImpl(executable, args, spawnOptions);
+  const supervisor = processTreeSupervisorFactory(child.pid, { platform, env: sourceEnv });
   const readStdout = capture(child.stdout, outputLimits.stdoutBytes);
   const readStderr = capture(child.stderr, outputLimits.stderrBytes);
   let timedOut = false;
@@ -189,9 +262,9 @@ export async function launchExternalProcess({
     terminationRequested = true;
     timedOut = reason === 'timeout';
     cancelled = reason === 'cancelled';
-    signalProcessGroup(child.pid, 'SIGTERM');
+    void supervisor.terminate(false).catch(() => {});
     graceTimer = setTimeout(() => {
-      if (signalProcessGroup(child.pid, 'SIGKILL')) forcedKill = true;
+      void supervisor.terminate(true).then((killed) => { if (killed) forcedKill = true; }).catch(() => {});
     }, graceMs);
     return true;
   };
@@ -208,11 +281,16 @@ export async function launchExternalProcess({
       clearTimeout(timeoutTimer);
       clearTimeout(graceTimer);
       await new Promise((done) => setTimeout(done, 30));
-      if (processGroupAlive(child.pid)) {
-        forcedKill = signalProcessGroup(child.pid, 'SIGKILL') || forcedKill;
-        await new Promise((done) => setTimeout(done, 30));
+      let orphanDetected = true;
+      try {
+        if (await supervisor.isAlive()) {
+          forcedKill = await supervisor.terminate(true) || forcedKill;
+          await new Promise((done) => setTimeout(done, 30));
+        }
+        orphanDetected = await supervisor.isAlive();
+      } catch {
+        orphanDetected = true;
       }
-      const orphanDetected = processGroupAlive(child.pid);
       const endedAt = new Date();
       const stdout = readStdout();
       const stderr = readStderr();
