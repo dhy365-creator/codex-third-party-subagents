@@ -23,6 +23,11 @@
   "files": [
     "src/",
     "scripts/",
+    "tests/windows-phase1.test.mjs",
+    "tests/windows-phase2a.test.mjs",
+    "tests/windows-acceptance-native.test.mjs",
+    "tests/fixtures/production-catalog.json",
+    "tests/fixtures/windows-process-tree-child.mjs",
     "docs/CODEX_INSTALL_PROMPT.zh-CN.md",
     "docs/architecture.md",
     "docs/configuration-zh.md",
@@ -57,6 +62,7 @@
   ],
   "scripts": {
     "test": "node scripts/test-suite.mjs",
+    "test:windows-acceptance": "node scripts/windows-acceptance.mjs",
     "install:dry": "node scripts/install.mjs",
     "doctor": "node scripts/doctor.mjs",
     "verify": "node scripts/verify.mjs",

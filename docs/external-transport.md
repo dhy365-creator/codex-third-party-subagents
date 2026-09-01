@@ -85,6 +85,15 @@ Phase 2 feature and runtime-route gates are also `false`, and the active bridge
 can proceed only after a Native `ALLOW` decision. Phase 2 made zero third-party
 Provider requests and does not establish local External runtime verification.
 
+### Windows acceptance command
+
+Run `npm run test:windows-acceptance` from a repository checkout. The command
+uses fixed repository-owned `node:test` suites, runs portable assertions on
+every platform, and marks native-only or still-unsupported gates with explicit
+skip reasons. It uses synthetic/task-local fixtures and makes no Provider
+request. Passing it does not enable Windows routing or set
+`runtimeVerified=true`.
+
 ## Adapter sequence
 
 ### Prepare

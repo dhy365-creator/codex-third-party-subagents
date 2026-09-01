@@ -2,6 +2,21 @@
 
 最后更新：2026-09-01
 
+## Windows Support Phase 2B2 first-party acceptance harness（本地候选）
+
+- 新增一方仓库命令 `npm run test:windows-acceptance`，固定运行 portable Phase 1/2A
+  assertions 与显式 platform-gated native Windows tests；测试仅使用 synthetic credential、
+  task-local fixture 和仓库内 child fixture，不发 Provider 请求，也不读取真实 Provider credential。
+- 可安全覆盖的 Windows Credential Manager round-trip、ACL/reparse、installer 生命周期和
+  process-tree descendant cleanup 由 normal `node:test` 承载；exact Windows Codex auth-command
+  consumption 与 Provider-backed attribution 显式保持 `MUST_REMAIN_UNVERIFIED`。
+- 此 harness 仅是证据基础设施。公开 Windows runtime 继续
+  `BLOCKED_PENDING_PHASE_2`，`runtimeVerified=false`，External normal route 继续 disabled，
+  Phase 2C live request 未授权。
+- macOS acceptance command 为 `22 total / 15 pass / 0 fail / 7 skip`；完整 `npm test`
+  为 `247 total / 240 pass / 0 fail / 7 skip`。pack dry-run 与 unpacked artifact command
+  回读通过，Provider requests 为 `0`。
+
 ## Windows Support Phase 2A runtime foundation（本地候选，待复核）
 
 - 基于已接受 LKG `03c76b0ea30d803bc41f43750493117d3bcd589f` 的独立 clean

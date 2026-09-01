@@ -2,6 +2,11 @@
 
 ## 当前发布
 
+- [x] 2026-09-01 新增 first-party Windows acceptance harness：
+  `npm run test:windows-acceptance` 运行 portable coverage、task-local native Credential Manager、
+  ACL/reparse、installer 与 process-tree checks；unsupported Codex/runtime gates 保持 explicit skip，
+  macOS focused `22/15/0/7`、完整测试 `247/240/0/7`、pack 与 unpacked artifact command
+  回读通过；Provider requests `0`，公开 runtime/default-off 边界未改变。
 - [x] 2026-09-01 完成 Windows Support Phase 2A 本地 runtime foundation 候选：Windows
   command-backed Credential Manager、ACL/reparse private tree、`.exe`/最小环境、process-tree
   supervisor 与内部 Phase 2B offline candidate 已实现；完整测试 `242 total / 239 pass / 0 fail /
@@ -24,10 +29,9 @@
   目标与父组件映射；聚焦测试 `35 total / 32 pass / 0 fail / 3 native-Windows skip`，完整
   macOS `npm test` `233 total / 230 pass / 0 fail / 3 native-Windows skip`。Native Windows cleanup/ACL/
   reparse 证据仍需在后续跨平台复查刷新。
-- [ ] Phase 2B 使用 immutable Phase 2A candidate 单独验证 native Windows ACL/reparse、
-  Credential Manager auth command、subprocess/process-tree、受支持 Codex CLI contract 与
-  release artifact clean install；不得发 Provider 请求。Phase 2C 仅在后续明确授权后执行一次
-  Flash live E2E。
+- [ ] Phase 2B3 在 immutable Phase 2B2 candidate 上仅运行一方验收命令，刷新 native Windows
+  Credential Manager、ACL/reparse、installer 与 process-tree evidence；exact supported Codex CLI
+  contract 与 Provider-backed runtime 仍不得推断。Phase 2C 仅在后续明确授权后执行一次 Flash live E2E。
 - [ ] 取得 DeepSeek V4 Flash 独立真实用户验收；公开 Beta 与维护者 clean-install E2E 不自动
   扩写为广义用户验收、自动路由或官方背书。
 

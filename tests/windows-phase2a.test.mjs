@@ -11,6 +11,7 @@ import {
   assertPrivateTree,
 } from '../src/transports/external-fs-safety.mjs';
 import {
+  assertExternalProcessGroupClosed,
   createProcessTreeSupervisor,
   isolatedChildEnvironment,
   resolveExecutable,
@@ -136,6 +137,20 @@ test('Windows process-tree supervisor uses bounded taskkill tree commands withou
   assert.equal(calls.every((call) => call.options.timeout === 5000), true);
 });
 
+test('External cleanup archives before orphan guard and releases the active slot only after it passes', async () => {
+  assert.throws(
+    () => assertExternalProcessGroupClosed({ orphanDetected: true }),
+    (error) => error.code === 'EXTERNAL_ORPHAN_ACTIVE',
+  );
+  const source = await fs.readFile('src/transports/external-codex.mjs', 'utf8');
+  const archive = source.indexOf('const archived = await finalizeExternalArchive');
+  const guard = source.indexOf('assertExternalProcessGroupClosed(state.processResult)', archive);
+  const release = source.indexOf(
+    'await releaseExternalSlot(state.slot, archived.archivePath, { fsOptions })', guard,
+  );
+  assert.equal(archive >= 0 && archive < guard && guard < release, true);
+});
+
 test('Phase 2A candidate is internal-only while normal Windows agent remains fail-closed', () => {
   const pack = resolveProviderPack('deepseek');
   const candidate = buildWindowsRuntimeCandidate({
@@ -185,4 +200,15 @@ test('installer, verifier, uninstaller, and package source include Phase 2A runt
     assert.match(source, /windows-credential-command\.mjs/u);
     assert.match(source, /windows-runtime-candidate\.mjs/u);
   }
+  const metadata = JSON.parse(await fs.readFile('package.json', 'utf8'));
+  for (const file of [
+    'tests/windows-phase1.test.mjs',
+    'tests/windows-phase2a.test.mjs',
+    'tests/windows-acceptance-native.test.mjs',
+    'tests/fixtures/production-catalog.json',
+    'tests/fixtures/windows-process-tree-child.mjs',
+  ]) {
+    assert.equal(metadata.files.includes(file), true);
+  }
+  assert.equal(metadata.scripts['test:windows-acceptance'], 'node scripts/windows-acceptance.mjs');
 });
